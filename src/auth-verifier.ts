@@ -164,7 +164,7 @@ export class AuthVerifier {
   public moderator: MethodAuthVerifier<AdminTokenOutput | ModServiceOutput> =
     async (ctx) => {
       const type = extractAuthType(ctx.req)
-      if (type === AuthType.BEARER) {
+      if (type === 'Bearer') {
         return this.modService(ctx)
       } else {
         return this.adminToken(ctx)
@@ -255,11 +255,11 @@ export class AuthVerifier {
     return async (ctx) => {
       const type = extractAuthType(ctx.req)
 
-      if (type === AuthType.BEARER) {
+      if (type === 'Bearer') {
         return access(ctx)
       }
 
-      if (type === AuthType.DPOP) {
+      if (type === 'DPoP') {
         return oauth(ctx)
       }
 
@@ -287,9 +287,9 @@ export class AuthVerifier {
     const authorization = this.authorization(opts)
     return async (ctx) => {
       const type = extractAuthType(ctx.req)
-      if (type === AuthType.BEARER || type === AuthType.DPOP) {
+      if (type === 'Bearer' || type === 'DPoP') {
         return authorization(ctx)
-      } else if (type === AuthType.BASIC) {
+      } else if (type === 'Basic') {
         return this.adminToken(ctx)
       } else {
         return this.unauthenticated(ctx)
@@ -314,7 +314,7 @@ export class AuthVerifier {
     UserServiceAuthOutput | UnauthenticatedOutput
   > = async (ctx) => {
     const type = extractAuthType(ctx.req)
-    if (type === AuthType.BEARER) {
+    if (type === 'Bearer') {
       return await this.userServiceAuth(ctx)
     } else {
       return this.unauthenticated(ctx)
