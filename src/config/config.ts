@@ -1,9 +1,23 @@
 import assert from 'node:assert';
 import path from 'node:path';
+import { type Did, type GenericUri, isDid } from '@atcute/lexicons/syntax';
 import { DAY, HOUR, SECOND } from '@atproto/common';
 import { BrandingInput, HcaptchaConfig } from '@atproto/oauth-provider';
-import { ensureValidDid } from '@atproto/syntax';
 import { ServerEnvironment } from './env.js';
+
+const asDid = (value: string, label: string): Did => {
+  if (!isDid(value)) {
+    throw new Error(`Invalid DID for ${label}: ${value}`);
+  }
+  return value;
+};
+
+const asUri = (value: string, label: string): GenericUri => {
+  if (!URL.canParse(value)) {
+    throw new Error(`Invalid URI for ${label}: ${value}`);
+  }
+  return value as GenericUri;
+};
 
 // off-config but still from env:
 // logging: LOG_LEVEL, LOG_SYSTEMS, LOG_ENABLED, LOG_DESTINATION
@@ -15,15 +29,21 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     hostname === 'localhost'
       ? `http://localhost:${port}`
       : `https://${hostname}`;
-  const did = env.serviceDid ?? `did:web:${hostname}`;
+  const did = env.serviceDid
+    ? asDid(env.serviceDid, 'serviceDid')
+    : (`did:web:${hostname}` as const);
   const serviceCfg: ServerConfig['service'] = {
     port,
     hostname,
     publicUrl,
     did,
     version: env.version, // default?
-    privacyPolicyUrl: env.privacyPolicyUrl,
-    termsOfServiceUrl: env.termsOfServiceUrl,
+    privacyPolicyUrl: env.privacyPolicyUrl
+      ? asUri(env.privacyPolicyUrl, 'privacyPolicyUrl')
+      : undefined,
+    termsOfServiceUrl: env.termsOfServiceUrl
+      ? asUri(env.termsOfServiceUrl, 'termsOfServiceUrl')
+      : undefined,
     contactEmailAddress: env.contactEmailAddress,
     acceptingImports: env.acceptingImports ?? true,
     maxImportSize: env.maxImportSize,
@@ -122,7 +142,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     );
     entrywayCfg = {
       url: env.entrywayUrl,
-      did: env.entrywayDid,
+      did: asDid(env.entrywayDid, 'entrywayDid'),
       jwtPublicKeyHex: env.entrywayJwtVerifyKeyK256PublicKeyHex,
       plcRotationKey: env.entrywayPlcRotationKey,
     };
@@ -183,7 +203,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     );
     bskyAppViewCfg = {
       url: env.bskyAppViewUrl,
-      did: env.bskyAppViewDid,
+      did: asDid(env.bskyAppViewDid, 'bskyAppViewDid'),
       cdnUrlPattern: env.bskyAppViewCdnUrlPattern,
     };
   }
@@ -196,7 +216,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     );
     modServiceCfg = {
       url: env.modServiceUrl,
-      did: env.modServiceDid,
+      did: asDid(env.modServiceDid, 'modServiceDid'),
     };
   }
 
@@ -208,7 +228,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     );
     reportServiceCfg = {
       url: env.reportServiceUrl,
-      did: env.reportServiceDid,
+      did: asDid(env.reportServiceDid, 'reportServiceDid'),
     };
   }
 
@@ -334,8 +354,10 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
   const lexiconCfg: LexiconResolverConfig = {};
 
   if (env.lexiconDidAuthority != null) {
-    ensureValidDid(env.lexiconDidAuthority);
-    lexiconCfg.didAuthority = env.lexiconDidAuthority;
+    lexiconCfg.didAuthority = asDid(
+      env.lexiconDidAuthority,
+      'lexiconDidAuthority',
+    );
   }
 
   return {
@@ -389,10 +411,10 @@ export type ServiceConfig = {
   port: number;
   hostname: string;
   publicUrl: string;
-  did: string;
+  did: Did;
   version?: string;
-  privacyPolicyUrl?: string;
-  termsOfServiceUrl?: string;
+  privacyPolicyUrl?: GenericUri;
+  termsOfServiceUrl?: GenericUri;
   acceptingImports: boolean;
   maxImportSize?: number;
   blobUploadLimit: number;
@@ -445,7 +467,7 @@ export type IdentityConfig = {
 
 export type EntrywayConfig = {
   url: string;
-  did: string;
+  did: Did;
   jwtPublicKeyHex: string;
   plcRotationKey: string;
 };
@@ -483,7 +505,7 @@ export type OAuthConfig = {
 };
 
 export type LexiconResolverConfig = {
-  didAuthority?: `did:${string}:${string}`;
+  didAuthority?: Did;
 };
 
 export type InvitesConfig =
@@ -521,16 +543,16 @@ export type RateLimitsConfig =
 
 export type BksyAppViewConfig = {
   url: string;
-  did: string;
+  did: Did;
   cdnUrlPattern?: string;
 };
 
 export type ModServiceConfig = {
   url: string;
-  did: string;
+  did: Did;
 };
 
 export type ReportServiceConfig = {
   url: string;
-  did: string;
+  did: Did;
 };
