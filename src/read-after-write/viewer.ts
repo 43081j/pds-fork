@@ -1,4 +1,4 @@
-import { LexMap, UriString, getBlobCidString } from '@atproto/lex';
+import { LexMap, UriString } from '@atproto/lex';
 import {
   AtUri,
   DidString,
@@ -10,8 +10,22 @@ import { AccountManager } from '../account-manager/account-manager.js';
 import { ActorStoreReader } from '../actor-store/actor-store-reader.js';
 import { BskyAppView } from '../bsky-app-view.js';
 import { ImageUrlBuilder } from '../image/image-url-builder.js';
-import { app } from '../lexicons.js';
+import {
+  AppBskyActorDefs,
+  AppBskyEmbedImages,
+  AppBskyFeedDefs,
+  AppBskyFeedPost,
+  AppBskyEmbedExternal,
+  AppBskyEmbedRecord,
+  AppBskyEmbedRecordWithMedia,
+  AppBskyFeedGetPosts,
+  AppBskyActorProfile,
+  AppBskyFeedGetFeedGenerator,
+  AppBskyGraphGetList,
+} from '@atcute/bluesky';
 import { LocalRecords, RecordDescript } from './types.js';
+import { is, LegacyBlob } from '@atcute/lexicons';
+import { isBlob, isLegacyBlob } from '@atcute/lexicons/interfaces';
 
 type CommonSignedUris =
   | 'avatar'
@@ -22,6 +36,13 @@ type CommonSignedUris =
 export type LocalViewerCreator = (
   actorStoreReader: ActorStoreReader,
 ) => LocalViewer;
+
+function getBlobCidString(blob: Blob | LegacyBlob): string {
+  if (isBlob(blob)) {
+    return blob.ref.toString();
+  }
+  return (blob as LegacyBlob).cid;
+}
 
 export class LocalViewer {
   public readonly actorStoreReader: ActorStoreReader;
@@ -78,7 +99,7 @@ export class LocalViewer {
     return this.actorStoreReader.record.getRecordsSinceRev(rev);
   }
 
-  async getProfileBasic(): Promise<app.bsky.actor.defs.ProfileViewBasic | null> {
+  async getProfileBasic(): Promise<AppBskyActorDefs.ProfileViewBasic | null> {
     const [profileRes, accountRes] = await Promise.all([
       this.actorStoreReader.record.getProfileRecord(),
       this.accountManager.getAccount(this.did),
@@ -97,9 +118,9 @@ export class LocalViewer {
   }
 
   async formatAndInsertPostsInFeed(
-    feed: app.bsky.feed.defs.FeedViewPost[],
-    posts: RecordDescript<app.bsky.feed.post.Main>[],
-  ): Promise<app.bsky.feed.defs.FeedViewPost[]> {
+    feed: AppBskyFeedDefs.FeedViewPost[],
+    posts: RecordDescript<AppBskyFeedPost.Main>[],
+  ): Promise<AppBskyFeedDefs.FeedViewPost[]> {
     if (posts.length === 0) {
       return feed;
     }
@@ -111,7 +132,7 @@ export class LocalViewer {
     );
     const formatted = maybeFormatted.filter(
       (p) => p !== null,
-    ) as app.bsky.feed.defs.PostView[];
+    ) as AppBskyFeedDefs.PostView[];
     for (const post of formatted) {
       const idx = feed.findIndex((fi) => fi.post.indexedAt < post.indexedAt);
       if (idx >= 0) {
@@ -124,8 +145,8 @@ export class LocalViewer {
   }
 
   async getPost(
-    descript: RecordDescript<app.bsky.feed.post.Main>,
-  ): Promise<app.bsky.feed.defs.PostView | null> {
+    descript: RecordDescript<AppBskyFeedPost.Main>,
+  ): Promise<AppBskyFeedDefs.PostView | null> {
     const { uri, cid, indexedAt, record } = descript;
     const author = await this.getProfileBasic();
     if (!author) return null;
@@ -144,25 +165,25 @@ export class LocalViewer {
     };
   }
 
-  async formatPostEmbed(post: app.bsky.feed.post.Main) {
+  async formatPostEmbed(post: AppBskyFeedPost.Main) {
     const embed = post.embed;
     if (!embed) return undefined;
-    if (app.bsky.embed.images.$isTypeOf(embed)) {
+    if (is(AppBskyEmbedImages.mainSchema, embed)) {
       return this.formatImageEmbed(embed);
-    } else if (app.bsky.embed.external.$isTypeOf(embed)) {
+    } else if (is(AppBskyEmbedExternal.mainSchema, embed)) {
       return this.formatExternalEmbed(embed);
-    } else if (app.bsky.embed.record.$isTypeOf(embed)) {
+    } else if (is(AppBskyEmbedRecord.mainSchema, embed)) {
       return this.formatRecordEmbed(embed);
-    } else if (app.bsky.embed.recordWithMedia.$isTypeOf(embed)) {
+    } else if (is(AppBskyEmbedRecordWithMedia.mainSchema, embed)) {
       return this.formatRecordWithMediaEmbed(embed);
     } else {
       return undefined;
     }
   }
 
-  formatImageEmbed(embed: app.bsky.embed.images.Main) {
+  formatImageEmbed(embed: AppBskyEmbedImages.Main) {
     const images = embed.images.map(
-      (img): app.bsky.embed.images.ViewImage => ({
+      (img): AppBskyEmbedImages.ViewImage => ({
         thumb: this.getImageUrl('feed_thumbnail', getBlobCidString(img.image)),
         fullsize: this.getImageUrl(
           'feed_fullsize',
@@ -172,12 +193,16 @@ export class LocalViewer {
         alt: img.alt,
       }),
     );
-    return app.bsky.embed.images.view.$build({ images });
+    return {
+      $type: 'app.bsky.embed.images#view' as const,
+      images,
+    };
   }
 
-  formatExternalEmbed(embed: app.bsky.embed.external.Main) {
+  formatExternalEmbed(embed: AppBskyEmbedExternal.Main) {
     const { uri, title, description, thumb } = embed.external;
-    return app.bsky.embed.external.view.$build({
+    return {
+      $type: 'app.bsky.embed.external#view' as const,
       external: {
         uri,
         title,
@@ -186,40 +211,43 @@ export class LocalViewer {
           ? this.getImageUrl('feed_thumbnail', getBlobCidString(thumb))
           : undefined,
       },
-    });
+    };
   }
 
-  async formatRecordEmbed(embed: app.bsky.embed.record.Main) {
+  async formatRecordEmbed(embed: AppBskyEmbedRecord.Main) {
     const view = await this.formatRecordEmbedInternal(embed);
-    return app.bsky.embed.record.view.$build({
-      record:
-        view ??
-        app.bsky.embed.record.viewNotFound.$build({
-          uri: embed.record.uri,
-          notFound: true,
-        }),
-    });
+    return {
+      $type: 'app.bsky.embed.record#view' as const,
+      record: view ?? {
+        $type: 'app.bsky.embed.record.viewNotFound',
+        uri: embed.record.uri,
+        notFound: true,
+      },
+    };
   }
 
-  private async formatRecordEmbedInternal(embed: app.bsky.embed.record.Main) {
+  private async formatRecordEmbedInternal(embed: AppBskyEmbedRecord.Main) {
     if (!this.bskyAppView) {
       return undefined;
     }
     const collection = new AtUri(embed.record.uri).collection;
-    if (collection === app.bsky.feed.post.$type) {
+    if (collection === 'app.bsky.feed.post') {
       const { headers } = await this.serviceAuthHeaders(
         this.did,
         app.bsky.feed.getPosts.$lxm,
       );
       const data = await this.bskyAppView.client.call(
-        app.bsky.feed.getPosts,
-        { uris: [embed.record.uri] },
-        { headers },
+        AppBskyFeedGetPosts.mainSchema,
+        {
+          uris: [embed.record.uri],
+          headers,
+        },
       );
       const post = data.posts[0];
       if (!post) return undefined;
 
-      return app.bsky.embed.record.viewRecord.$build({
+      return {
+        $type: 'app.bsky.embed.record#viewRecord' as const,
         uri: post.uri,
         cid: post.cid,
         author: post.author,
@@ -227,55 +255,60 @@ export class LocalViewer {
         labels: post.labels,
         embeds: post.embed ? [post.embed] : undefined,
         indexedAt: post.indexedAt,
-      });
-    } else if (collection === app.bsky.feed.generator.$type) {
+      };
+    } else if (collection === 'app.bsky.feed.generator') {
       const { headers } = await this.serviceAuthHeaders(
         this.did,
         app.bsky.feed.getFeedGenerator.$lxm,
       );
       const data = await this.bskyAppView.client.call(
-        app.bsky.feed.getFeedGenerator,
-        { feed: embed.record.uri },
-        { headers },
+        AppBskyFeedGetFeedGenerator.mainSchema,
+        { feed: embed.record.uri, headers },
       );
-      return app.bsky.feed.defs.generatorView.$build(data.view);
-    } else if (collection === app.bsky.graph.list.$type) {
+      return {
+        $type: 'app.bsky.feed.defs.generator#view' as const,
+        ...data.view,
+      };
+    } else if (collection === 'app.bsky.graph.list') {
       const { headers } = await this.serviceAuthHeaders(
         this.did,
         app.bsky.graph.getList.$lxm,
       );
       const data = await this.bskyAppView.client.call(
-        app.bsky.graph.getList,
-        { list: embed.record.uri },
-        { headers },
+        AppBskyGraphGetList.mainSchema,
+        { list: embed.record.uri, headers },
       );
-      return app.bsky.graph.defs.listView.$build(data.list);
+      return {
+        $type: 'app.bsky.graph.defs.list#view' as const,
+        ...data.list,
+      };
     }
     return undefined;
   }
 
-  async formatRecordWithMediaEmbed(embed: app.bsky.embed.recordWithMedia.Main) {
-    const media = app.bsky.embed.images.$isTypeOf(embed.media)
+  async formatRecordWithMediaEmbed(embed: AppBskyEmbedRecordWithMedia.Main) {
+    const media = is(AppBskyEmbedImages.mainSchema, embed.media)
       ? this.formatImageEmbed(embed.media)
-      : app.bsky.embed.external.$isTypeOf(embed.media)
+      : is(AppBskyEmbedExternal.mainSchema, embed.media)
         ? this.formatExternalEmbed(embed.media)
         : null;
 
     if (!media) return undefined;
 
     const record = await this.formatRecordEmbed(embed.record);
-    return app.bsky.embed.recordWithMedia.view.$build({
+    return {
+      $type: 'app.bsky.embed.recordWithMedia#view' as const,
       record,
       media,
-    });
+    };
   }
 
   updateProfileViewBasic<
     T extends
-      | app.bsky.actor.defs.ProfileViewDetailed
-      | app.bsky.actor.defs.ProfileViewBasic
-      | app.bsky.actor.defs.ProfileView,
-  >(view: T, record: app.bsky.actor.profile.Main): T {
+      | AppBskyActorDefs.ProfileViewDetailed
+      | AppBskyActorDefs.ProfileViewBasic
+      | AppBskyActorDefs.ProfileView,
+  >(view: T, record: AppBskyActorProfile.Main): T {
     return {
       ...view,
       displayName: record.displayName,
@@ -287,19 +320,19 @@ export class LocalViewer {
 
   updateProfileView<
     T extends
-      | app.bsky.actor.defs.ProfileViewDetailed
-      | app.bsky.actor.defs.ProfileViewBasic
-      | app.bsky.actor.defs.ProfileView,
-  >(view: T, record: app.bsky.actor.profile.Main): T {
+      | AppBskyActorDefs.ProfileViewDetailed
+      | AppBskyActorDefs.ProfileViewBasic
+      | AppBskyActorDefs.ProfileView,
+  >(view: T, record: AppBskyActorProfile.Main): T {
     return {
       ...this.updateProfileViewBasic(view, record),
       description: record.description,
     };
   }
 
-  updateProfileDetailed<T extends app.bsky.actor.defs.ProfileViewDetailed>(
+  updateProfileDetailed<T extends AppBskyActorDefs.ProfileViewDetailed>(
     view: T,
-    record: app.bsky.actor.profile.Main,
+    record: AppBskyActorProfile.Main,
   ): T {
     return {
       ...this.updateProfileView(view, record),

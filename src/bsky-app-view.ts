@@ -1,5 +1,5 @@
 import { format } from 'node:util';
-import { Client } from '@atproto/lex';
+import { Client, simpleFetchHandler } from '@atcute/client';
 
 export type AppViewOptions = {
   url: string;
@@ -17,13 +17,9 @@ export class BskyAppView {
   constructor(options: AppViewOptions) {
     this.did = options.did;
     this.url = options.url;
-    this.client = new Client(
-      { service: options.url },
-      {
-        strictResponseProcessing: false,
-        validateResponse: options.validateResponse ?? false,
-      },
-    );
+    this.client = new Client({
+      handler: simpleFetchHandler({ service: options.url }),
+    });
     this.cdnUrlPattern = options.cdnUrlPattern;
   }
 
