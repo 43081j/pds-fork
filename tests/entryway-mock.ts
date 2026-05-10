@@ -206,7 +206,7 @@ export class MockEntryway {
           signer: opts.plcRotationKey,
         })
 
-        // Create account on PDS (no auth needed — userServiceAuthOptional)
+        // Create account on PDS (no auth needed - userServiceAuthOptional)
         await pdsAgent.com.atproto.server.createAccount({
           did: plcCreate.did,
           handle,

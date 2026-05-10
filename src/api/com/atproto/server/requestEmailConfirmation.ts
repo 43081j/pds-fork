@@ -1,61 +1,69 @@
-import { DAY, HOUR } from '@atproto/common';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerRequestEmailConfirmation } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.requestEmailConfirmation, {
-    rateLimit: [
-      {
-        durationMs: DAY,
-        points: 15,
-        calcKey: ({ auth }) => auth.credentials.did,
-      },
-      {
-        durationMs: HOUR,
-        points: 5,
-        calcKey: ({ auth }) => auth.credentials.did,
-      },
-    ],
-    auth: ctx.authVerifier.authorization({
-      checkTakedown: true,
-      authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'email', action: 'manage' });
-      },
-    }),
-    handler: async ({ auth, req }) => {
+// TODO: rate limiting (was 15/day + 5/hour per did) - needs router-level
+// middleware in the new XRPCRouter setup.
+
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerRequestEmailConfirmation.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    checkTakedown: true,
+    authorize: (permissions) => {
+      permissions.assertAccount({ attr: 'email', action: 'manage' });
+    },
+  });
+
+  return {
+    lxm: ComAtprotoServerRequestEmailConfirmation.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const did = auth.credentials.did;
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
       });
       if (!account) {
-        throw new InvalidRequestError('account not found');
+        throw new InvalidRequestError({ message: 'account not found' });
       }
 
       if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
-          auth.credentials.did,
-          com.atproto.server.requestEmailConfirmation.$lxm,
+          request,
+          did,
+          'com.atproto.server.requestEmailConfirmation',
         );
-
-        await ctx.entrywayClient.xrpc(
-          com.atproto.server.requestEmailConfirmation,
-          { headers },
+        await ensureOk(
+          ctx.entrywayClient.post(
+            'com.atproto.server.requestEmailConfirmation',
+            { headers, as: null },
+          ),
         );
-
-        return;
+      } else {
+        if (!account.email) {
+          throw new InvalidRequestError({
+            message: 'account does not have an email address',
+          });
+        }
+        const token = await ctx.accountManager.createEmailToken(
+          did,
+          'confirm_email',
+        );
+        await ctx.mailer.sendConfirmEmail({ token }, { to: account.email });
       }
 
-      if (!account.email) {
-        throw new InvalidRequestError('account does not have an email address');
-      }
-      const token = await ctx.accountManager.createEmailToken(
-        did,
-        'confirm_email',
-      );
-      await ctx.mailer.sendConfirmEmail({ token }, { to: account.email });
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }

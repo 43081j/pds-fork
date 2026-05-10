@@ -1,24 +1,20 @@
-import { DAY, HOUR } from '@atproto/common';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerRequestPasswordReset } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
+// TODO: rate limiting (was 50/day + 15/hour) - needs router-level middleware.
 
-  server.add(com.atproto.server.requestPasswordReset, {
-    rateLimit: [
-      {
-        durationMs: DAY,
-        points: 50,
-      },
-      {
-        durationMs: HOUR,
-        points: 15,
-      },
-    ],
-    handler: async ({ input: { body }, req }) => {
-      const email = body.email.toLowerCase();
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerRequestPasswordReset.mainSchema> {
+  return {
+    lxm: ComAtprotoServerRequestPasswordReset.mainSchema,
+    handler: async ({ request, input }) => {
+      const email = input.email.toLowerCase();
 
       const account = await ctx.accountManager.getAccountByEmail(email, {
         includeDeactivated: true,
@@ -34,19 +30,24 @@ export default function (server: Server, ctx: AppContext) {
           { handle: account.handle ?? account.email, token },
           { to: account.email },
         );
-        return;
+        return new Response(null, { status: 200 });
       }
 
-      if (entrywayClient) {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        await entrywayClient.xrpc(com.atproto.server.requestPasswordReset, {
-          headers,
-          body,
-        });
-        return;
+      if (ctx.entrywayClient) {
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.requestPasswordReset', {
+            headers,
+            input,
+            as: null,
+          }),
+        );
+        return new Response(null, { status: 200 });
       }
 
-      throw new InvalidRequestError('account does not have an email address');
+      throw new InvalidRequestError({
+        message: 'account does not have an email address',
+      });
     },
-  });
+  };
 }

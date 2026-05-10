@@ -1,42 +1,54 @@
-import { ForbiddenError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerRevokeAppPassword } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  ForbiddenError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
-
-  const auth = ctx.authVerifier.authorization({
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerRevokeAppPassword.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
     authorize: () => {
-      throw new ForbiddenError(
-        'OAuth credentials are not supported for this endpoint',
-      );
+      throw new ForbiddenError({
+        message: 'OAuth credentials are not supported for this endpoint',
+      });
     },
   });
 
-  if (entrywayClient) {
-    server.add(com.atproto.server.revokeAppPassword, {
-      auth,
-      handler: async ({ auth, input: { body }, req }) => {
+  return {
+    lxm: ComAtprotoServerRevokeAppPassword.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           auth.credentials.did,
-          com.atproto.server.revokeAppPassword.$lxm,
+          'com.atproto.server.revokeAppPassword',
         );
 
-        await entrywayClient.xrpc(com.atproto.server.revokeAppPassword, {
-          headers,
-          body,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.server.revokeAppPassword, {
-      auth,
-      handler: async ({ auth, input: { body } }) => {
-        const requester = auth.credentials.did;
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.revokeAppPassword', {
+            headers,
+            input,
+            as: null,
+          }),
+        );
+      } else {
+        await ctx.accountManager.revokeAppPassword(
+          auth.credentials.did,
+          input.name,
+        );
+      }
 
-        await ctx.accountManager.revokeAppPassword(requester, body.name);
-      },
-    });
-  }
+      return new Response(null, { status: 200, headers: responseHeaders });
+    },
+  };
 }

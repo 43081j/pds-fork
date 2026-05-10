@@ -1,36 +1,52 @@
+import { ComAtprotoServerGetAccountInviteCodes } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
 import {
+  type XrpcQueryHandlerOptions,
   ForbiddenError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
 import { CodeDetail } from '../../../../account-manager/helpers/invite.js';
 import { ACCESS_FULL } from '../../../../auth-scope.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { genInvCodes } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.getAccountInviteCodes, {
-    auth: ctx.authVerifier.authorization({
-      checkTakedown: true,
-      scopes: ACCESS_FULL,
-      authorize: () => {
-        throw new ForbiddenError(
-          'OAuth credentials are not supported for this endpoint',
-        );
-      },
-    }),
-    handler: async ({ params, auth, req }) => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoServerGetAccountInviteCodes.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    checkTakedown: true,
+    scopes: ACCESS_FULL,
+    authorize: () => {
+      throw new ForbiddenError({
+        message: 'OAuth credentials are not supported for this endpoint',
+      });
+    },
+  });
+
+  return {
+    lxm: ComAtprotoServerGetAccountInviteCodes.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params,
+      });
+
       if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           auth.credentials.did,
-          com.atproto.server.getAccountInviteCodes.$lxm,
+          'com.atproto.server.getAccountInviteCodes',
         );
-        return ctx.entrywayClient.xrpc(
-          com.atproto.server.getAccountInviteCodes,
-          { params, headers },
+        const body = await ensureOk(
+          ctx.entrywayClient.get('com.atproto.server.getAccountInviteCodes', {
+            params,
+            headers,
+          }),
         );
+        return json(body, { headers: responseHeaders });
       }
 
       const requester = auth.credentials.did;
@@ -41,7 +57,10 @@ export default function (server: Server, ctx: AppContext) {
         ctx.accountManager.getAccountInvitesCodes(requester),
       ]);
       if (!account) {
-        throw new InvalidRequestError('Account not found', 'NotFound');
+        throw new InvalidRequestError({
+          message: 'Account not found',
+          error: 'NotFound',
+        });
       }
 
       let created: CodeDetail[] = [];
@@ -77,12 +96,9 @@ export default function (server: Server, ctx: AppContext) {
         return true;
       });
 
-      return {
-        encoding: 'application/json' as const,
-        body: { codes: filtered },
-      };
+      return json({ codes: filtered }, { headers: responseHeaders });
     },
-  });
+  };
 }
 
 /**

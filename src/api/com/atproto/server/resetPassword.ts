@@ -1,50 +1,42 @@
-import { MINUTE } from '@atproto/common';
+import { ComAtprotoServerResetPassword } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
 import {
+  type XrpcProcedureHandlerOptions,
   InvalidRequestError,
-  MethodRateLimit,
-  Server,
-} from '@atproto/xrpc-server';
+} from '@atcute/xrpc-server';
 import { NEW_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
+// TODO: rate limiting (was 50/5min) - needs router-level middleware.
 
-  const rateLimit: MethodRateLimit<
-    void,
-    com.atproto.server.resetPassword.$Params,
-    com.atproto.server.resetPassword.$Input
-  > = [
-    {
-      durationMs: 5 * MINUTE,
-      points: 50,
-    },
-  ];
-
-  if (entrywayClient) {
-    server.add(com.atproto.server.resetPassword, {
-      rateLimit,
-      handler: async ({ input: { body }, req }) => {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        await entrywayClient.xrpc(com.atproto.server.resetPassword, {
-          headers,
-          body,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.server.resetPassword, {
-      rateLimit,
-      handler: async ({ input: { body } }) => {
-        const { token, password } = body;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerResetPassword.mainSchema> {
+  return {
+    lxm: ComAtprotoServerResetPassword.mainSchema,
+    handler: async ({ request, input }) => {
+      if (ctx.entrywayClient) {
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.resetPassword', {
+            headers,
+            input,
+            as: null,
+          }),
+        );
+      } else {
+        const { token, password } = input;
 
         if (password.length > NEW_PASSWORD_MAX_LENGTH) {
-          throw new InvalidRequestError('Invalid password length.');
+          throw new InvalidRequestError({
+            message: 'Invalid password length.',
+          });
         }
 
         await ctx.accountManager.resetPassword({ token, password });
-      },
-    });
-  }
+      }
+
+      return new Response(null, { status: 200 });
+    },
+  };
 }

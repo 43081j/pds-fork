@@ -1,44 +1,57 @@
-import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax';
+import { ComAtprotoServerRefreshSession } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
 import {
+  type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
+import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax';
 import { formatAccountStatus } from '../../../../account-manager/account-manager.js';
 import { AppContext } from '../../../../context.js';
 import { softDeleted } from '../../../../db/util.js';
-import { com } from '../../../../lexicons.js';
 import { didDocForSession } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.refreshSession, {
-    auth: ctx.authVerifier.refresh(),
-    handler: async ({
-      auth,
-      req,
-    }): Promise<com.atproto.server.refreshSession.$Output> => {
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerRefreshSession.mainSchema> {
+  const refreshVerifier = ctx.authVerifier.refresh();
+
+  return {
+    lxm: ComAtprotoServerRefreshSession.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await refreshVerifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const did = auth.credentials.did;
       const user = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
       });
       if (!user) {
-        throw new InvalidRequestError(
-          `Could not find user info for account: ${did}`,
-        );
+        throw new InvalidRequestError({
+          message: `Could not find user info for account: ${did}`,
+        });
       }
       if (softDeleted(user)) {
-        throw new AuthRequiredError(
-          'Account has been taken down',
-          'AccountTakedown',
-        );
+        throw new AuthRequiredError({
+          message: 'Account has been taken down',
+          error: 'AccountTakedown',
+        });
       }
 
       if (ctx.entrywayClient) {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        return ctx.entrywayClient.xrpc(com.atproto.server.refreshSession, {
-          headers,
-        });
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        const body = await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.refreshSession', {
+            headers,
+          }),
+        );
+        return json(body, { headers: responseHeaders });
       }
 
       const [didDoc, rotated] = await Promise.all([
@@ -46,17 +59,18 @@ export default function (server: Server, ctx: AppContext) {
         ctx.accountManager.rotateRefreshToken(auth.credentials.tokenId),
       ]);
       if (rotated === null) {
-        throw new InvalidRequestError('Token has been revoked', 'ExpiredToken');
+        throw new InvalidRequestError({
+          message: 'Token has been revoked',
+          error: 'ExpiredToken',
+        });
       }
 
       const { status, active } = formatAccountStatus(user);
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           accessJwt: rotated.accessJwt,
           refreshJwt: rotated.refreshJwt,
-
           did: user.did as DidString,
           didDoc,
           handle: (user.handle ?? INVALID_HANDLE) as HandleString,
@@ -65,7 +79,8 @@ export default function (server: Server, ctx: AppContext) {
           active,
           status,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }

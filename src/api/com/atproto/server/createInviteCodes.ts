@@ -1,42 +1,43 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerCreateInviteCodes } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { genInvCodes } from './util.js';
 
-type AccountCodes = com.atproto.server.createInviteCodes.AccountCodes;
+type AccountCodes = ComAtprotoServerCreateInviteCodes.AccountCodes;
 
-export default function (server: Server, ctx: AppContext) {
-  const { entryway } = ctx.cfg;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerCreateInviteCodes.mainSchema> {
+  const adminToken = ctx.authVerifier.adminToken;
+  const entrywayConfigured = !!ctx.cfg.entryway;
 
-  if (entryway) {
-    server.add(com.atproto.server.createInviteCodes, {
-      auth: ctx.authVerifier.adminToken,
-      handler: () => {
-        throw new InvalidRequestError(
-          'Account invites are managed by the entryway service',
-        );
-      },
-    });
-  } else {
-    server.add(com.atproto.server.createInviteCodes, {
-      auth: ctx.authVerifier.adminToken,
-      handler: async ({ input }) => {
-        const { codeCount, useCount } = input.body;
+  return {
+    lxm: ComAtprotoServerCreateInviteCodes.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await adminToken({ request, responseHeaders, params: {} });
 
-        const forAccounts = input.body.forAccounts ?? ['admin'];
+      if (entrywayConfigured) {
+        throw new InvalidRequestError({
+          message: 'Account invites are managed by the entryway service',
+        });
+      }
 
-        const accountCodes: AccountCodes[] = [];
-        for (const account of forAccounts) {
-          const codes = genInvCodes(ctx.cfg, codeCount);
-          accountCodes.push({ account, codes });
-        }
-        await ctx.accountManager.createInviteCodes(accountCodes, useCount);
+      const { codeCount, useCount } = input;
+      const forAccounts = input.forAccounts ?? ['admin'];
 
-        return {
-          encoding: 'application/json' as const,
-          body: { codes: accountCodes },
-        };
-      },
-    });
-  }
+      const accountCodes: AccountCodes[] = [];
+      for (const account of forAccounts) {
+        const codes = genInvCodes(ctx.cfg, codeCount);
+        accountCodes.push({ account, codes });
+      }
+      await ctx.accountManager.createInviteCodes(accountCodes, useCount);
+
+      return json({ codes: accountCodes }, { headers: responseHeaders });
+    },
+  };
 }

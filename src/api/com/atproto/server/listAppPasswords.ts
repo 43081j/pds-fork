@@ -1,45 +1,53 @@
-import { ForbiddenError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerListAppPasswords } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcQueryHandlerOptions,
+  ForbiddenError,
+  json,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
-
-  const auth = ctx.authVerifier.authorization({
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoServerListAppPasswords.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
     authorize: () => {
-      throw new ForbiddenError(
-        'OAuth credentials are not supported for this endpoint',
-      );
+      throw new ForbiddenError({
+        message: 'OAuth credentials are not supported for this endpoint',
+      });
     },
   });
 
-  if (entrywayClient) {
-    server.add(com.atproto.server.listAppPasswords, {
-      auth,
-      handler: async ({ auth, req }) => {
+  return {
+    lxm: ComAtprotoServerListAppPasswords.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           auth.credentials.did,
-          com.atproto.server.listAppPasswords.$lxm,
+          'com.atproto.server.listAppPasswords',
         );
 
-        return entrywayClient.xrpc(com.atproto.server.listAppPasswords, {
-          headers,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.server.listAppPasswords, {
-      auth,
-      handler: async ({ auth }) => {
-        const passwords = await ctx.accountManager.listAppPasswords(
-          auth.credentials.did,
+        const body = await ensureOk(
+          ctx.entrywayClient.get('com.atproto.server.listAppPasswords', {
+            headers,
+          }),
         );
-        return {
-          encoding: 'application/json',
-          body: { passwords },
-        };
-      },
-    });
-  }
+
+        return json(body, { headers: responseHeaders });
+      }
+
+      const passwords = await ctx.accountManager.listAppPasswords(
+        auth.credentials.did,
+      );
+      return json({ passwords }, { headers: responseHeaders });
+    },
+  };
 }

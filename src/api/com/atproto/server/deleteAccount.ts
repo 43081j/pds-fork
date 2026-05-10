@@ -1,43 +1,45 @@
-import { MINUTE } from '@atproto/common';
+import { ComAtprotoServerDeleteAccount } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
 import {
+  type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+} from '@atcute/xrpc-server';
 import { OLD_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
+// TODO: rate limiting (was 50/5min) - needs router-level middleware.
 
-  server.add(com.atproto.server.deleteAccount, {
-    rateLimit: {
-      durationMs: 5 * MINUTE,
-      points: 50,
-    },
-    handler: async ({ input: { body }, req }) => {
-      const { did, password, token } = body;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerDeleteAccount.mainSchema> {
+  return {
+    lxm: ComAtprotoServerDeleteAccount.mainSchema,
+    handler: async ({ request, input }) => {
+      const { did, password, token } = input;
 
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
       });
       if (!account) {
-        throw new InvalidRequestError('account not found');
+        throw new InvalidRequestError({ message: 'account not found' });
       }
 
-      if (entrywayClient) {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        await entrywayClient.xrpc(com.atproto.server.deleteAccount, {
-          body,
-          headers,
-        });
-        return;
+      if (ctx.entrywayClient) {
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.deleteAccount', {
+            input,
+            headers,
+            as: null,
+          }),
+        );
+        return new Response(null, { status: 200 });
       }
 
       if (password.length > OLD_PASSWORD_MAX_LENGTH) {
-        throw new InvalidRequestError('Invalid password length.');
+        throw new InvalidRequestError({ message: 'Invalid password length.' });
       }
 
       const validPass = await ctx.accountManager.verifyAccountPassword(
@@ -45,7 +47,7 @@ export default function (server: Server, ctx: AppContext) {
         password,
       );
       if (!validPass) {
-        throw new AuthRequiredError('Invalid did or password');
+        throw new AuthRequiredError({ message: 'Invalid did or password' });
       }
 
       await ctx.accountManager.assertValidEmailToken(
@@ -57,6 +59,8 @@ export default function (server: Server, ctx: AppContext) {
       await ctx.accountManager.deleteAccount(did);
       const accountSeq = await ctx.sequencer.sequenceAccountEvt(did, 'deleted');
       await ctx.sequencer.deleteAllForUser(did, [accountSeq]);
+
+      return new Response(null, { status: 200 });
     },
-  });
+  };
 }

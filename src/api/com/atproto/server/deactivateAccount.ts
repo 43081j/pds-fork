@@ -1,45 +1,57 @@
-import { ForbiddenError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerDeactivateAccount } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  ForbiddenError,
+} from '@atcute/xrpc-server';
 import { ACCESS_FULL } from '../../../../auth-scope.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
-
-  const auth = ctx.authVerifier.authorization({
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerDeactivateAccount.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
     additional: ['com.atproto.takendown'],
     scopes: ACCESS_FULL,
     authorize: () => {
-      throw new ForbiddenError(
-        'OAuth credentials are not supported for this endpoint',
-      );
+      throw new ForbiddenError({
+        message: 'OAuth credentials are not supported for this endpoint',
+      });
     },
   });
 
-  if (entrywayClient) {
-    server.add(com.atproto.server.deactivateAccount, {
-      auth,
-      // in the case of entryway, the full flow is deactivateAccount (PDS) -> deactivateAccount (Entryway) -> updateSubjectStatus(PDS)
-      handler: async ({ input: { body }, req }) => {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        await entrywayClient.xrpc(com.atproto.server.deactivateAccount, {
-          headers,
-          body,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.server.deactivateAccount, {
-      auth,
-      handler: async ({ input: { body }, auth }) => {
+  return {
+    lxm: ComAtprotoServerDeactivateAccount.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      if (ctx.entrywayClient) {
+        // in the case of entryway, the full flow is deactivateAccount (PDS) ->
+        // deactivateAccount (Entryway) -> updateSubjectStatus (PDS)
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.deactivateAccount', {
+            headers,
+            input,
+            as: null,
+          }),
+        );
+      } else {
         const requester = auth.credentials.did;
         await ctx.accountManager.deactivateAccount(
           requester,
-          body.deleteAfter ?? null,
+          input.deleteAfter ?? null,
         );
         const status = await ctx.accountManager.getAccountStatus(requester);
         await ctx.sequencer.sequenceAccountEvt(requester, status);
-      },
-    });
-  }
+      }
+
+      return new Response(null, { status: 200, headers: responseHeaders });
+    },
+  };
 }

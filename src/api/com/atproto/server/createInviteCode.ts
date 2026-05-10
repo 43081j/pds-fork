@@ -1,38 +1,40 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerCreateInviteCode } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { genInvCode } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entryway } = ctx.cfg;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerCreateInviteCode.mainSchema> {
+  const adminToken = ctx.authVerifier.adminToken;
+  const entrywayConfigured = !!ctx.cfg.entryway;
 
-  if (entryway) {
-    server.add(com.atproto.server.createInviteCode, {
-      auth: ctx.authVerifier.adminToken,
-      handler: () => {
-        throw new InvalidRequestError(
-          'Account invites are managed by the entryway service',
-        );
-      },
-    });
-  } else {
-    server.add(com.atproto.server.createInviteCode, {
-      auth: ctx.authVerifier.adminToken,
-      handler: async ({ input }) => {
-        const { useCount, forAccount = 'admin' } = input.body;
+  return {
+    lxm: ComAtprotoServerCreateInviteCode.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await adminToken({ request, responseHeaders, params: {} });
 
-        const code = genInvCode(ctx.cfg);
+      if (entrywayConfigured) {
+        throw new InvalidRequestError({
+          message: 'Account invites are managed by the entryway service',
+        });
+      }
 
-        await ctx.accountManager.createInviteCodes(
-          [{ account: forAccount, codes: [code] }],
-          useCount,
-        );
+      const { useCount, forAccount = 'admin' } = input;
 
-        return {
-          encoding: 'application/json' as const,
-          body: { code },
-        };
-      },
-    });
-  }
+      const code = genInvCode(ctx.cfg);
+
+      await ctx.accountManager.createInviteCodes(
+        [{ account: forAccount, codes: [code] }],
+        useCount,
+      );
+
+      return json({ code }, { headers: responseHeaders });
+    },
+  };
 }

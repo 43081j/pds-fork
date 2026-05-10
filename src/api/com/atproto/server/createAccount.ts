@@ -1,37 +1,45 @@
+import { ComAtprotoServerCreateAccount } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  AuthRequiredError,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import * as plc from '@did-plc/lib';
 import { isEmailValid } from '@hapi/address';
 import { isDisposableEmail } from 'disposable-email-domains-js';
-import { DidDocument, MINUTE, check } from '@atproto/common';
+import { DidDocument, check } from '@atproto/common';
 import { ExportableKeypair, Keypair, Secp256k1Keypair } from '@atproto/crypto';
 import { AtprotoData, ensureAtpDocument } from '@atproto/identity';
 import { DidString } from '@atproto/syntax';
-import {
-  AuthRequiredError,
-  InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
 import { NEW_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js';
 import { AppContext } from '../../../../context.js';
 import { baseNormalizeAndValidate } from '../../../../handle/index.js';
-import { com } from '../../../../lexicons.js';
+import { httpLogger } from '../../../../logger.js';
 import { syncEvtDataFromCommit } from '../../../../sequencer/index.js';
 import { safeResolveDidDoc } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.createAccount, {
-    rateLimit: {
-      durationMs: 5 * MINUTE,
-      points: 100,
-    },
-    auth: ctx.authVerifier.userServiceAuthOptional,
-    handler: async ({
-      input,
-      auth,
-      req,
-    }): Promise<com.atproto.server.createAccount.$Output> => {
+type CreateAccountInput = ComAtprotoServerCreateAccount.$input;
+
+// TODO: rate limiting (was 100/5min) - needs router-level middleware.
+
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerCreateAccount.mainSchema> {
+  const verifier = ctx.authVerifier.userServiceAuthOptional;
+
+  return {
+    lxm: ComAtprotoServerCreateAccount.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       // @NOTE Until this code and the OAuthStore's `createAccount` are
       // refactored together, any change made here must be reflected over there.
-
       const requester = auth.credentials?.did ?? null;
       const {
         did,
@@ -43,8 +51,8 @@ export default function (server: Server, ctx: AppContext) {
         plcOp,
         deactivated,
       } = ctx.entrywayClient
-        ? await validateInputsForEntrywayPds(ctx, input.body)
-        : await validateInputsForLocalPds(ctx, input.body, requester);
+        ? await validateInputsForEntrywayPds(ctx, input)
+        : await validateInputsForLocalPds(ctx, input, requester);
 
       let didDoc: DidDocument | undefined;
       let creds: { accessJwt: string; refreshJwt: string };
@@ -59,8 +67,8 @@ export default function (server: Server, ctx: AppContext) {
           try {
             await ctx.plcClient.sendOperation(did, plcOp);
           } catch (err) {
-            req.log.error(
-              { didKey: ctx.plcRotationKey.did(), handle },
+            httpLogger.error(
+              { didKey: ctx.plcRotationKey.did(), handle, err },
               'failed to create did:plc',
             );
             throw err;
@@ -97,53 +105,52 @@ export default function (server: Server, ctx: AppContext) {
         throw err;
       }
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           handle,
-          did: did,
-          // @ts-expect-error https://github.com/bluesky-social/atproto/pull/4406
+          did,
           didDoc,
           accessJwt: creds.accessJwt,
           refreshJwt: creds.refreshJwt,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }
 
 const validateInputsForEntrywayPds = async (
   ctx: AppContext,
-  input: com.atproto.server.createAccount.$InputBody,
+  input: CreateAccountInput,
 ) => {
   const { did, plcOp } = input;
   const handle = baseNormalizeAndValidate(input.handle);
   if (!did || !input.plcOp) {
-    throw new InvalidRequestError(
-      'non-entryway pds requires bringing a DID and plcOp',
-    );
+    throw new InvalidRequestError({
+      message: 'non-entryway pds requires bringing a DID and plcOp',
+    });
   }
   if (!check.is(plcOp, plc.def.operation)) {
-    throw new InvalidRequestError(
-      'invalid plc operation',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'invalid plc operation',
+      error: 'IncompatibleDidDoc',
+    });
   }
   const plcRotationKey = ctx.cfg.entryway?.plcRotationKey;
   if (!plcRotationKey || !plcOp.rotationKeys.includes(plcRotationKey)) {
-    throw new InvalidRequestError(
-      'PLC DID does not include service rotation key',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'PLC DID does not include service rotation key',
+      error: 'IncompatibleDidDoc',
+    });
   }
   try {
     await plc.assureValidOp(plcOp);
     await plc.assureValidSig([plcRotationKey], plcOp);
   } catch (err) {
-    throw new InvalidRequestError(
-      'invalid plc operation',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'invalid plc operation',
+      error: 'IncompatibleDidDoc',
+    });
   }
   const doc = plc.formatDidDoc({ did, ...plcOp });
   const data = ensureAtpDocument(doc);
@@ -156,7 +163,9 @@ const validateInputsForEntrywayPds = async (
     signingKey = await ctx.actorStore.getReservedKeypair(data.signingKey);
   }
   if (!signingKey) {
-    throw new InvalidRequestError('reserved signing key does not exist');
+    throw new InvalidRequestError({
+      message: 'reserved signing key does not exist',
+    });
   }
 
   validateAtprotoData(data, {
@@ -179,33 +188,34 @@ const validateInputsForEntrywayPds = async (
 
 const validateInputsForLocalPds = async (
   ctx: AppContext,
-  input: com.atproto.server.createAccount.$InputBody,
+  input: CreateAccountInput,
   requester: string | null,
 ) => {
   const { email, password, inviteCode } = input;
   if (input.plcOp) {
-    throw new InvalidRequestError('Unsupported input: "plcOp"');
+    throw new InvalidRequestError({ message: 'Unsupported input: "plcOp"' });
   }
 
   if (password && password.length > NEW_PASSWORD_MAX_LENGTH) {
-    throw new InvalidRequestError(
-      `Password too long. Maximum length is ${NEW_PASSWORD_MAX_LENGTH} characters.`,
-    );
+    throw new InvalidRequestError({
+      message: `Password too long. Maximum length is ${NEW_PASSWORD_MAX_LENGTH} characters.`,
+    });
   }
 
   if (ctx.cfg.invites.required && !inviteCode) {
-    throw new InvalidRequestError(
-      'No invite code provided',
-      'InvalidInviteCode',
-    );
+    throw new InvalidRequestError({
+      message: 'No invite code provided',
+      error: 'InvalidInviteCode',
+    });
   }
 
   if (!email) {
-    throw new InvalidRequestError('Email is required');
+    throw new InvalidRequestError({ message: 'Email is required' });
   } else if (!isEmailValid(email) || isDisposableEmail(email)) {
-    throw new InvalidRequestError(
-      'This email address is not supported, please use a different email.',
-    );
+    throw new InvalidRequestError({
+      message:
+        'This email address is not supported, please use a different email.',
+    });
   }
 
   // normalize & ensure valid handle
@@ -225,9 +235,11 @@ const validateInputsForLocalPds = async (
     ctx.accountManager.getAccountByEmail(email),
   ]);
   if (handleAccnt) {
-    throw new InvalidRequestError(`Handle already taken: ${handle}`);
+    throw new InvalidRequestError({
+      message: `Handle already taken: ${handle}`,
+    });
   } else if (emailAcct) {
-    throw new InvalidRequestError(`Email already taken: ${email}`);
+    throw new InvalidRequestError({ message: `Email already taken: ${email}` });
   }
 
   // determine the did & any plc ops we need to send
@@ -239,9 +251,9 @@ const validateInputsForLocalPds = async (
   let deactivated = false;
   if (input.did) {
     if (input.did !== requester) {
-      throw new AuthRequiredError(
-        `Missing auth to create account with did: ${input.did}`,
-      );
+      throw new AuthRequiredError({
+        message: `Missing auth to create account with did: ${input.did}`,
+      });
     }
     did = input.did;
     plcOp = null;
@@ -267,7 +279,7 @@ const validateInputsForLocalPds = async (
 const formatDidAndPlcOp = async (
   ctx: AppContext,
   handle: string,
-  input: com.atproto.server.createAccount.$InputBody,
+  input: CreateAccountInput,
   signingKey: Keypair,
 ): Promise<{
   did: string;
@@ -305,19 +317,19 @@ const validateAtprotoData = (
   // resolve the user's did doc data, including rotationKeys if did:plc
   // determine if we have the capability to make changes to their DID
   if (data.handle !== expected.handle) {
-    throw new InvalidRequestError(
-      'provided handle does not match DID document handle',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'provided handle does not match DID document handle',
+      error: 'IncompatibleDidDoc',
+    });
   } else if (data.pds !== expected.pds) {
-    throw new InvalidRequestError(
-      'DID document pds endpoint does not match service endpoint',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'DID document pds endpoint does not match service endpoint',
+      error: 'IncompatibleDidDoc',
+    });
   } else if (data.signingKey !== expected.signingKey) {
-    throw new InvalidRequestError(
-      'DID document signing key does not match service signing key',
-      'IncompatibleDidDoc',
-    );
+    throw new InvalidRequestError({
+      message: 'DID document signing key does not match service signing key',
+      error: 'IncompatibleDidDoc',
+    });
   }
 };

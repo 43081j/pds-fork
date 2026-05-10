@@ -1,44 +1,67 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerConfirmEmail } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.confirmEmail, {
-    auth: ctx.authVerifier.authorization({
-      checkTakedown: true,
-      authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'email', action: 'manage' });
-      },
-    }),
-    handler: async ({ auth, input: { body }, req }) => {
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoServerConfirmEmail.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    checkTakedown: true,
+    authorize: (permissions) => {
+      permissions.assertAccount({ attr: 'email', action: 'manage' });
+    },
+  });
+
+  return {
+    lxm: ComAtprotoServerConfirmEmail.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const { did } = auth.credentials;
 
       const user = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
       });
       if (!user) {
-        throw new InvalidRequestError('user not found', 'AccountNotFound');
+        throw new InvalidRequestError({
+          message: 'user not found',
+          error: 'AccountNotFound',
+        });
       }
 
       if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
-          auth.credentials.did,
-          com.atproto.server.confirmEmail.$lxm,
+          request,
+          did,
+          'com.atproto.server.confirmEmail',
         );
-        await ctx.entrywayClient.xrpc(com.atproto.server.confirmEmail, {
-          headers,
-          body,
-        });
-        return;
+        await ensureOk(
+          ctx.entrywayClient.post('com.atproto.server.confirmEmail', {
+            headers,
+            input,
+            as: null,
+          }),
+        );
+      } else {
+        if (user.email !== input.email.toLowerCase()) {
+          throw new InvalidRequestError({
+            message: 'invalid email',
+            error: 'InvalidEmail',
+          });
+        }
+        await ctx.accountManager.confirmEmail({ did, token: input.token });
       }
 
-      const { token, email } = body;
-
-      if (user.email !== email.toLowerCase()) {
-        throw new InvalidRequestError('invalid email', 'InvalidEmail');
-      }
-      await ctx.accountManager.confirmEmail({ did, token });
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }
