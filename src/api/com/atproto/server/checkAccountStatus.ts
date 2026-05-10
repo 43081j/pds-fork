@@ -1,17 +1,28 @@
-import { Server } from '@atproto/xrpc-server';
+import { ComAtprotoServerCheckAccountStatus } from '@atcute/atproto';
+import { type XrpcQueryHandlerOptions, json } from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { isValidDidDocForService } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.server.checkAccountStatus, {
-    auth: ctx.authVerifier.authorization({
-      authorize: () => {
-        // always allow
-      },
-    }),
-    handler: async ({ auth }) => {
-      const requester = auth.credentials.did;
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoServerCheckAccountStatus.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // always allow
+    },
+  });
+
+  return {
+    lxm: ComAtprotoServerCheckAccountStatus.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const { credentials } = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      const requester = credentials.did;
       const [
         repoRoot,
         repoBlocks,
@@ -32,9 +43,8 @@ export default function (server: Server, ctx: AppContext) {
         isValidDidDocForService(ctx, requester),
       ]);
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           activated,
           validDid,
           repoCommit: repoRoot.cid.toString(),
@@ -45,7 +55,8 @@ export default function (server: Server, ctx: AppContext) {
           expectedBlobs,
           importedBlobs,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }

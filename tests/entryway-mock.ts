@@ -1,10 +1,8 @@
-import { createPrivateKey } from 'node:crypto'
 import * as http from 'node:http'
+import { Secp256k1PrivateKeyExportable } from '@atcute/crypto'
 import * as plcLib from '@did-plc/lib'
 import { HttpTerminator, createHttpTerminator } from 'http-terminator'
 import * as jose from 'jose'
-import KeyEncoder from 'key-encoder'
-import * as ui8 from 'uint8arrays'
 import { AtpAgent } from '@atproto/api'
 import { getVerificationMaterial } from '@atproto/common'
 import { Secp256k1Keypair, randomStr } from '@atproto/crypto'
@@ -16,8 +14,15 @@ import {
   parseReqNsid,
   verifyJwt as verifyServiceJwt,
 } from '@atproto/xrpc-server'
-import { bearerTokenFromReq, createPublicKeyObject } from '../src/auth-verifier.js'
+import { createPublicKeyObject } from '../src/auth-verifier.js'
 import { com } from '../src/lexicons.js'
+
+const bearerTokenFromReq = (req: http.IncomingMessage): string | null => {
+  const authorization = req.headers['authorization']
+  if (!authorization) return null
+  const [type, token] = authorization.split(' ')
+  return type?.toLowerCase() === 'bearer' && token ? token : null
+}
 
 interface Account {
   did: DidString
@@ -64,11 +69,16 @@ export class MockEntryway {
   }
 
   static async create(opts: MockEntrywayOpts): Promise<MockEntryway> {
-    const keyEncoder = new KeyEncoder('secp256k1')
-    const privateKeyHex = ui8.toString(await opts.jwtSigningKey.export(), 'hex')
-    const privatePem = keyEncoder.encodePrivate(privateKeyHex, 'raw', 'pem')
-    const jwtPrivateKey = createPrivateKey({ format: 'pem', key: privatePem })
-    const jwtPublicKey = createPublicKeyObject(
+    const privateKeyBytes = await opts.jwtSigningKey.export()
+    const privateKey = await Secp256k1PrivateKeyExportable.importRaw(
+      privateKeyBytes,
+    )
+    const privateJwk = await privateKey.exportPrivateKey('jwk')
+    const jwtPrivateKey = (await jose.importJWK(
+      privateJwk as jose.JWK,
+      'ES256K',
+    )) as jose.KeyLike
+    const jwtPublicKey = await createPublicKeyObject(
       opts.jwtSigningKey.publicKeyStr('hex'),
     )
 

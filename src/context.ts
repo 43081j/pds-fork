@@ -253,7 +253,7 @@ export class AppContext {
 
     const jwtSecretKey = createSecretKeyObject(secrets.jwtSecret);
     const jwtPublicKey = cfg.entryway
-      ? createPublicKeyObject(cfg.entryway.jwtPublicKeyHex)
+      ? await createPublicKeyObject(cfg.entryway.jwtPublicKeyHex)
       : null;
 
     const imageUrlBuilder = new ImageUrlBuilder(

@@ -1,7 +1,5 @@
-import { KeyObject, createPublicKey, createSecretKey } from 'node:crypto';
-import { IncomingMessage, ServerResponse } from 'node:http';
+import { Secp256k1PublicKey } from '@atcute/crypto';
 import * as jose from 'jose';
-import KeyEncoder from 'key-encoder';
 import { getVerificationMaterial } from '@atproto/common';
 import { IdResolver, getDidKeyFromMultibase } from '@atproto/identity';
 import { AtIdentifierString, DidString, isDidString } from '@atproto/lex';
@@ -20,11 +18,7 @@ import {
   Awaitable,
   ForbiddenError,
   InvalidRequestError,
-  MethodAuthContext,
-  MethodAuthVerifier,
-  Params,
   XRPCError,
-  parseReqNsid,
   verifyJwt as verifyServiceJwt,
 } from '@atproto/xrpc-server';
 import { AccountManager } from './account-manager/account-manager.js';
@@ -40,8 +34,19 @@ import {
 } from './auth-output.js';
 import { ACCESS_STANDARD, AuthScope, isAuthScope } from './auth-scope.js';
 import { softDeleted } from './db/index.js';
-import { appendVary } from './util/http.js';
 import { WithRequired } from './util/types.js';
+
+export type AuthParams = Record<string, unknown>;
+
+export type AuthContext<P extends AuthParams = AuthParams> = {
+  request: Request;
+  responseHeaders: Headers;
+  params: P;
+};
+
+export type AuthVerifierFn<A, P extends AuthParams = AuthParams> = (
+  ctx: AuthContext<P>,
+) => Awaitable<A>;
 
 export type VerifiedOptions = {
   checkTakedown?: boolean;
@@ -56,16 +61,16 @@ export type ExtraScopedOptions<S extends AuthScope = AuthScope> = {
   additional?: readonly S[];
 };
 
-export type AuthorizedOptions<P extends Params = Params> = {
+export type AuthorizedOptions<P extends AuthParams = AuthParams> = {
   authorize: (
     permissions: ScopePermissions,
-    ctx: MethodAuthContext<P>,
+    ctx: AuthContext<P>,
   ) => Awaitable<void>;
 };
 
 export type AuthVerifierOpts = {
   publicUrl: string;
-  jwtKey: KeyObject;
+  jwtKey: jose.KeyLike | Uint8Array;
   adminPass: string;
   dids: {
     pds: string;
@@ -91,7 +96,7 @@ export type VerifyBearerJwtResult<S extends AuthScope = AuthScope> = {
 
 export class AuthVerifier {
   private _publicUrl: string;
-  private _jwtKey: KeyObject;
+  private _jwtKey: jose.KeyLike | Uint8Array;
   private _adminPass: string;
   public dids: AuthVerifierOpts['dids'];
   public accountManager: AccountManager;
@@ -115,14 +120,14 @@ export class AuthVerifier {
 
   // verifiers (arrow fns to preserve scope)
 
-  public unauthenticated: MethodAuthVerifier<UnauthenticatedOutput> = (ctx) => {
-    setAuthHeaders(ctx.res);
+  public unauthenticated: AuthVerifierFn<UnauthenticatedOutput> = (ctx) => {
+    setAuthHeaders(ctx.responseHeaders);
 
     // @NOTE this auth method is typically used as fallback when no other auth
     // method is applicable. This means that the presence of an "authorization"
     // header means that that header is invalid (as it did not match any of the
     // other auth methods).
-    if (ctx.req.headers['authorization']) {
+    if (ctx.request.headers.get('authorization')) {
       throw new AuthRequiredError('Invalid authorization header');
     }
 
@@ -131,9 +136,9 @@ export class AuthVerifier {
     };
   };
 
-  public adminToken: MethodAuthVerifier<AdminTokenOutput> = async (ctx) => {
-    setAuthHeaders(ctx.res);
-    const parsed = parseBasicAuth(ctx.req);
+  public adminToken: AuthVerifierFn<AdminTokenOutput> = async (ctx) => {
+    setAuthHeaders(ctx.responseHeaders);
+    const parsed = parseBasicAuth(ctx.request);
     if (!parsed) {
       throw new AuthRequiredError();
     }
@@ -145,12 +150,12 @@ export class AuthVerifier {
     return { credentials: { type: 'admin_token' } };
   };
 
-  public modService: MethodAuthVerifier<ModServiceOutput> = async (ctx) => {
-    setAuthHeaders(ctx.res);
+  public modService: AuthVerifierFn<ModServiceOutput> = async (ctx) => {
+    setAuthHeaders(ctx.responseHeaders);
     if (!this.dids.modService) {
       throw new AuthRequiredError('Untrusted issuer', 'UntrustedIss');
     }
-    const payload = await this.verifyServiceJwt(ctx.req, {
+    const payload = await this.verifyServiceJwt(ctx.request, {
       iss: [this.dids.modService, `${this.dids.modService}#atproto_labeler`],
     });
     return {
@@ -161,9 +166,9 @@ export class AuthVerifier {
     };
   };
 
-  public moderator: MethodAuthVerifier<AdminTokenOutput | ModServiceOutput> =
+  public moderator: AuthVerifierFn<AdminTokenOutput | ModServiceOutput> =
     async (ctx) => {
-      const type = extractAuthType(ctx.req);
+      const type = extractAuthType(ctx.request);
       if (type === 'Bearer') {
         return this.modService(ctx);
       } else {
@@ -173,7 +178,7 @@ export class AuthVerifier {
 
   protected access<S extends AuthScope>(
     options: VerifiedOptions & Required<ScopedOptions<S>>,
-  ): MethodAuthVerifier<AccessOutput<S>> {
+  ): AuthVerifierFn<AccessOutput<S>> {
     const { scopes, ...statusOptions } = options;
 
     const verifyJwtOptions: VerifyBearerJwtOptions<S> = {
@@ -189,10 +194,10 @@ export class AuthVerifier {
     };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res);
+      setAuthHeaders(ctx.responseHeaders);
 
       const { sub: did, scope } = await this.verifyBearerJwt(
-        ctx.req,
+        ctx.request,
         verifyJwtOptions,
       );
 
@@ -206,7 +211,7 @@ export class AuthVerifier {
 
   public refresh(options?: {
     allowExpired?: boolean;
-  }): MethodAuthVerifier<RefreshOutput> {
+  }): AuthVerifierFn<RefreshOutput> {
     const verifyOptions: VerifyBearerJwtOptions<'com.atproto.refresh'> = {
       clockTolerance: options?.allowExpired ? Infinity : undefined,
       typ: 'refresh+jwt',
@@ -216,9 +221,9 @@ export class AuthVerifier {
     };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res);
+      setAuthHeaders(ctx.responseHeaders);
 
-      const result = await this.verifyBearerJwt(ctx.req, verifyOptions);
+      const result = await this.verifyBearerJwt(ctx.request, verifyOptions);
 
       const tokenId = result.jti;
       if (!tokenId) {
@@ -239,14 +244,14 @@ export class AuthVerifier {
     };
   }
 
-  public authorization<P extends Params>({
+  public authorization<P extends AuthParams>({
     scopes = ACCESS_STANDARD,
     additional = [],
     ...options
   }: VerifiedOptions &
     ScopedOptions &
     ExtraScopedOptions &
-    AuthorizedOptions<P>): MethodAuthVerifier<AccessOutput | OAuthOutput, P> {
+    AuthorizedOptions<P>): AuthVerifierFn<AccessOutput | OAuthOutput, P> {
     const access = this.access({
       ...options,
       scopes: [...scopes, ...additional],
@@ -254,7 +259,7 @@ export class AuthVerifier {
     const oauth = this.oauth(options);
 
     return async (ctx) => {
-      const type = extractAuthType(ctx.req);
+      const type = extractAuthType(ctx.request);
 
       if (type === 'Bearer') {
         return access(ctx);
@@ -266,7 +271,7 @@ export class AuthVerifier {
 
       // Auth headers are set through the access and oauth methods so we only
       // need to set them here if we reach this point
-      setAuthHeaders(ctx.res);
+      setAuthHeaders(ctx.responseHeaders);
 
       if (type !== null) {
         throw new InvalidRequestError(
@@ -279,15 +284,15 @@ export class AuthVerifier {
     };
   }
 
-  public authorizationOrAdminTokenOptional<P extends Params>(
+  public authorizationOrAdminTokenOptional<P extends AuthParams>(
     opts: VerifiedOptions & ExtraScopedOptions & AuthorizedOptions<P>,
-  ): MethodAuthVerifier<
+  ): AuthVerifierFn<
     OAuthOutput | AccessOutput | AdminTokenOutput | UnauthenticatedOutput,
     P
   > {
     const authorization = this.authorization(opts);
     return async (ctx) => {
-      const type = extractAuthType(ctx.req);
+      const type = extractAuthType(ctx.request);
       if (type === 'Bearer' || type === 'DPoP') {
         return authorization(ctx);
       } else if (type === 'Basic') {
@@ -298,11 +303,11 @@ export class AuthVerifier {
     };
   }
 
-  public userServiceAuth: MethodAuthVerifier<UserServiceAuthOutput> = async (
+  public userServiceAuth: AuthVerifierFn<UserServiceAuthOutput> = async (
     ctx,
   ) => {
-    setAuthHeaders(ctx.res);
-    const payload = await this.verifyServiceJwt(ctx.req);
+    setAuthHeaders(ctx.responseHeaders);
+    const payload = await this.verifyServiceJwt(ctx.request);
     return {
       credentials: {
         type: 'user_service_auth',
@@ -311,10 +316,10 @@ export class AuthVerifier {
     };
   };
 
-  public userServiceAuthOptional: MethodAuthVerifier<
+  public userServiceAuthOptional: AuthVerifierFn<
     UserServiceAuthOutput | UnauthenticatedOutput
   > = async (ctx) => {
-    const type = extractAuthType(ctx.req);
+    const type = extractAuthType(ctx.request);
     if (type === 'Bearer') {
       return await this.userServiceAuth(ctx);
     } else {
@@ -322,15 +327,15 @@ export class AuthVerifier {
     }
   };
 
-  public authorizationOrUserServiceAuth<P extends Params>(
+  public authorizationOrUserServiceAuth<P extends AuthParams>(
     options: VerifiedOptions &
       ScopedOptions &
       ExtraScopedOptions &
       AuthorizedOptions<P>,
-  ): MethodAuthVerifier<UserServiceAuthOutput | OAuthOutput | AccessOutput, P> {
+  ): AuthVerifierFn<UserServiceAuthOutput | OAuthOutput | AccessOutput, P> {
     const authorizationVerifier = this.authorization(options);
     return async (ctx) => {
-      if (isDefinitelyServiceAuth(ctx.req)) {
+      if (isDefinitelyServiceAuth(ctx.request)) {
         return this.userServiceAuth(ctx);
       } else {
         return authorizationVerifier(ctx);
@@ -338,46 +343,42 @@ export class AuthVerifier {
     };
   }
 
-  protected oauth<P extends Params>({
+  protected oauth<P extends AuthParams>({
     authorize,
     ...verifyStatusOptions
-  }: VerifiedOptions & AuthorizedOptions<P>): MethodAuthVerifier<
-    OAuthOutput,
-    P
-  > {
+  }: VerifiedOptions & AuthorizedOptions<P>): AuthVerifierFn<OAuthOutput, P> {
     const verifyTokenOptions: VerifyTokenPayloadOptions = {
       audience: [this.dids.pds],
       scope: ['atproto'],
     };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res);
+      setAuthHeaders(ctx.responseHeaders);
 
-      const { req, res } = ctx;
+      const { request, responseHeaders } = ctx;
 
       // https://datatracker.ietf.org/doc/html/rfc9449#section-8.2
       const dpopNonce = this.oauthVerifier.nextDpopNonce();
       if (dpopNonce) {
-        res.setHeader('DPoP-Nonce', dpopNonce);
-        res.appendHeader('Access-Control-Expose-Headers', 'DPoP-Nonce');
+        responseHeaders.set('DPoP-Nonce', dpopNonce);
+        responseHeaders.append('Access-Control-Expose-Headers', 'DPoP-Nonce');
       }
 
-      const originalUrl = req.originalUrl || req.url || '/';
-      const url = new URL(originalUrl, this._publicUrl);
+      const url = new URL(request.url, this._publicUrl);
 
       const { scope, sub: did } = await this.oauthVerifier
         .authenticateRequest(
-          req.method || 'GET',
+          request.method,
           url,
-          req.headers,
+          headersToRecord(request.headers),
           verifyTokenOptions,
         )
         .catch((err) => {
           // Make sure to include any WWW-Authenticate header in the response
           // (particularly useful for DPoP's "use_dpop_nonce" error)
           if (err instanceof WWWAuthenticateError) {
-            res.setHeader('WWW-Authenticate', err.wwwAuthenticateHeader);
-            res.appendHeader(
+            responseHeaders.set('WWW-Authenticate', err.wwwAuthenticateHeader);
+            responseHeaders.append(
               'Access-Control-Expose-Headers',
               'WWW-Authenticate',
             );
@@ -464,10 +465,10 @@ export class AuthVerifier {
    * payload's type and wraps errors into {@link InvalidRequestError}.
    */
   protected async verifyBearerJwt<S extends AuthScope = AuthScope>(
-    req: IncomingMessage,
+    request: Request,
     { scopes, ...options }: VerifyBearerJwtOptions<S>,
   ): Promise<VerifyBearerJwtResult<S>> {
-    const token = bearerTokenFromReq(req);
+    const token = bearerTokenFromRequest(request);
     if (!token) {
       throw new AuthRequiredError(undefined, 'AuthMissing');
     }
@@ -520,15 +521,15 @@ export class AuthVerifier {
   }
 
   protected async verifyServiceJwt(
-    req: IncomingMessage,
+    request: Request,
     opts?: { iss?: string[] },
   ) {
-    const jwtStr = bearerTokenFromReq(req);
+    const jwtStr = bearerTokenFromRequest(request);
     if (!jwtStr) {
       throw new AuthRequiredError('missing jwt', 'MissingJwt');
     }
 
-    const nsid = parseReqNsid(req);
+    const nsid = parseXrpcNsid(new URL(request.url).pathname);
     const payload = await verifyServiceJwt(
       jwtStr,
       null,
@@ -588,9 +589,9 @@ const knownAuthTypes = ['Basic', 'Bearer', 'DPoP'] as const;
 type AuthType = (typeof knownAuthTypes)[number];
 
 const parseAuthorizationHeader = (
-  req: IncomingMessage,
+  request: Request,
 ): [type: null] | [type: AuthType, token: string] => {
-  const authorization = req.headers['authorization'];
+  const authorization = request.headers.get('authorization');
   if (!authorization) return [null];
 
   const result = authorization.split(' ');
@@ -620,28 +621,28 @@ const parseAuthorizationHeader = (
  * function should not be used to verify service auth tokens. It is only used to
  * check if a token is definitely a service auth token.
  */
-const isDefinitelyServiceAuth = (req: IncomingMessage): boolean => {
-  const token = bearerTokenFromReq(req);
+const isDefinitelyServiceAuth = (request: Request): boolean => {
+  const token = bearerTokenFromRequest(request);
   if (!token) return false;
   const payload = jose.decodeJwt(token);
   return payload['lxm'] != null;
 };
 
-const extractAuthType = (req: IncomingMessage): AuthType | null => {
-  const [type] = parseAuthorizationHeader(req);
+const extractAuthType = (request: Request): AuthType | null => {
+  const [type] = parseAuthorizationHeader(request);
   return type;
 };
 
-export const bearerTokenFromReq = (req: IncomingMessage) => {
-  const [type, token] = parseAuthorizationHeader(req);
+export const bearerTokenFromRequest = (request: Request) => {
+  const [type, token] = parseAuthorizationHeader(request);
   return type === 'Bearer' ? token : null;
 };
 
 const parseBasicAuth = (
-  req: IncomingMessage,
+  request: Request,
 ): { username: string; password: string } | null => {
   try {
-    const [type, b64] = parseAuthorizationHeader(req);
+    const [type, b64] = parseAuthorizationHeader(request);
     if (type !== 'Basic') return null;
     const decoded = Buffer.from(b64, 'base64').toString('utf8');
     // We must not use split(':') because the password can contain colons
@@ -655,17 +656,59 @@ const parseBasicAuth = (
   }
 };
 
-export const createSecretKeyObject = (secret: string): KeyObject => {
-  return createSecretKey(Buffer.from(secret));
+export const createSecretKeyObject = (secret: string): Uint8Array => {
+  return new TextEncoder().encode(secret);
 };
 
-const keyEncoder = new KeyEncoder('secp256k1');
-export const createPublicKeyObject = (publicKeyHex: string): KeyObject => {
-  const key = keyEncoder.encodePublic(publicKeyHex, 'raw', 'pem');
-  return createPublicKey({ format: 'pem', key });
+export const createPublicKeyObject = async (
+  publicKeyHex: string,
+): Promise<jose.KeyLike> => {
+  const bytes = Buffer.from(publicKeyHex, 'hex');
+  const key = await Secp256k1PublicKey.importRaw(bytes);
+  const jwk = await key.exportPublicKey('jwk');
+  return (await jose.importJWK(jwk as jose.JWK, 'ES256K')) as jose.KeyLike;
 };
 
-function setAuthHeaders(res: ServerResponse) {
-  res.setHeader('Cache-Control', 'private');
-  appendVary(res, 'Authorization');
+const headersToRecord = (
+  headers: Headers,
+): Record<string, string | string[] | undefined> => {
+  const record: Record<string, string | string[] | undefined> = {};
+  for (const [key, value] of headers) {
+    const lower = key.toLowerCase();
+    const existing = record[lower];
+    if (existing === undefined) {
+      record[lower] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      record[lower] = [existing, value];
+    }
+  }
+  return record;
+};
+
+const parseXrpcNsid = (pathname: string): string => {
+  const match = pathname.match(/\/xrpc\/([^/?#]+)/);
+  if (!match) {
+    throw new InvalidRequestError('Invalid xrpc path');
+  }
+  return match[1]!;
+};
+
+function setAuthHeaders(headers: Headers) {
+  headers.set('Cache-Control', 'private');
+  appendVary(headers, 'Authorization');
+}
+
+function appendVary(headers: Headers, value: string) {
+  const existing = headers.get('Vary');
+  const search = value.toLowerCase();
+  if (existing) {
+    const present = existing
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .some((v) => v === search || v === '*');
+    if (present) return;
+  }
+  headers.append('Vary', value);
 }
