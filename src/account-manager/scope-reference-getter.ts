@@ -1,12 +1,12 @@
+import { ComAtprotoTempDereferenceScope } from '@atcute/atproto';
+import { Client, ClientResponseError, ok as ensureOk } from '@atcute/client';
 import Redis from 'ioredis';
 import { DAY, backoffMs, retry } from '@atproto/common';
-import { Client, XrpcError } from '@atproto/lex';
 import { InvalidTokenError, OAuthScope } from '@atproto/oauth-provider';
 import { UpstreamFailureError } from '@atproto/xrpc-server';
 import { CachedGetter, GetterOptions } from '@atproto-labs/simple-store';
 import { SimpleStoreMemory } from '@atproto-labs/simple-store-memory';
 import { SimpleStoreRedis } from '@atproto-labs/simple-store-redis';
-import { com } from '../lexicons.js';
 import { oauthLogger } from '../logger.js';
 
 const PREFIX = 'ref:';
@@ -16,6 +16,11 @@ const isScopeReference = (scope?: OAuthScope): scope is ScopeReference =>
   scope != null && scope.startsWith(PREFIX) && !scope.includes(' ');
 
 const identity = <T>(value: T): T => value;
+
+const isRetryableUpstreamFailure = (err: unknown): boolean => {
+  if (!(err instanceof ClientResponseError)) return false;
+  return err.status >= 500 && err.status <= 599;
+};
 
 export class ScopeReferenceGetter extends CachedGetter<
   ScopeReference,
@@ -30,9 +35,7 @@ export class ScopeReferenceGetter extends CachedGetter<
           maxRetries: 3,
           getWaitMs: (n) => backoffMs(n, 250, 2000),
           retryable: (err) =>
-            !options?.signal?.aborted &&
-            err instanceof XrpcError &&
-            err.shouldRetry(),
+            !options?.signal?.aborted && isRetryableUpstreamFailure(err),
         });
       },
       redis
@@ -57,13 +60,12 @@ export class ScopeReferenceGetter extends CachedGetter<
     oauthLogger.info({ ref }, 'Fetching scope reference');
 
     try {
-      const { scope } = await this.entryway.call(
-        com.atproto.temp.dereferenceScope,
-        { scope: ref },
-        {
+      const { scope } = await ensureOk(
+        this.entryway.call(ComAtprotoTempDereferenceScope.mainSchema, {
+          params: { scope: ref },
           signal: opts?.signal,
           headers: opts?.noCache ? { 'Cache-Control': 'no-cache' } : undefined,
-        },
+        }),
       );
 
       oauthLogger.info({ ref, scope }, 'Successfully fetched scope reference');
@@ -90,7 +92,10 @@ export class ScopeReferenceGetter extends CachedGetter<
 }
 
 function handleDereferenceError(cause: unknown): never {
-  if (cause instanceof XrpcError && cause.error === 'InvalidScopeReference') {
+  if (
+    cause instanceof ClientResponseError &&
+    cause.error === 'InvalidScopeReference'
+  ) {
     // The scope reference cannot be found on the server.
     // Consider the session as invalid, allowing entryway to
     // re-build the scope as the user re-authenticates. This

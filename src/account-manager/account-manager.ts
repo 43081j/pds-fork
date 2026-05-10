@@ -1,4 +1,4 @@
-import { KeyObject } from 'node:crypto';
+import * as jose from 'jose';
 import { HOUR, wait } from '@atproto/common';
 import { IdResolver } from '@atproto/identity';
 import {
@@ -65,13 +65,13 @@ export type AccountManagerDbConfig = {
 export class AccountManager {
   readonly db: AccountDb;
   readonly idResolver: IdResolver;
-  readonly jwtKey: KeyObject;
+  readonly jwtKey: jose.KeyLike | Uint8Array;
   readonly serviceDid: string;
   readonly serviceHandleDomains: string[];
 
   constructor(
     idResolver: IdResolver,
-    jwtKey: KeyObject,
+    jwtKey: jose.KeyLike | Uint8Array,
     serviceDid: string,
     serviceHandleDomains: string[],
     db: AccountManagerDbConfig,

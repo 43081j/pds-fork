@@ -1,13 +1,12 @@
 import assert from 'node:assert';
 import * as plc from '@did-plc/lib';
-import express from 'express';
 import { Redis } from 'ioredis';
 import * as nodemailer from 'nodemailer';
 import * as undici from 'undici';
 import { KmsKeypair, S3BlobStore } from '@atproto/aws';
 import * as crypto from '@atproto/crypto';
 import { IdResolver } from '@atproto/identity';
-import { Client } from '@atproto/lex';
+import { Client, type FetchHandler, simpleFetchHandler } from '@atcute/client';
 import {
   AccessTokenMode,
   JoseKey,
@@ -30,7 +29,11 @@ import { AccountManager } from './account-manager/account-manager.js';
 import { OAuthStore } from './account-manager/oauth-store.js';
 import { ScopeReferenceGetter } from './account-manager/scope-reference-getter.js';
 import { ActorStore } from './actor-store/actor-store.js';
-import { authPassthru, forwardedFor } from './api/proxy.js';
+import {
+  authPassthru,
+  clientIpFromRequest,
+  forwardedFor,
+} from './api/proxy.js';
 import {
   AuthVerifier,
   createPublicKeyObject,
@@ -204,51 +207,28 @@ export class AppContext {
       : undefined;
 
     const moderationClient = cfg.modService
-      ? new Client(
-          { service: cfg.modService.url },
-          {
-            // Trust internal services to send us well-formed responses
-            strictResponseProcessing: false,
-            validateResponse: cfg.service.devMode,
-          },
-        )
+      ? new Client({
+          handler: simpleFetchHandler({ service: cfg.modService.url }),
+        })
       : undefined;
     const reportingClient = cfg.reportService
-      ? new Client(
-          { service: cfg.reportService.url },
-          {
-            // Trust internal services to send us well-formed responses
-            strictResponseProcessing: false,
-            validateResponse: cfg.service.devMode,
-          },
-        )
+      ? new Client({
+          handler: simpleFetchHandler({ service: cfg.reportService.url }),
+        })
       : undefined;
     const entrywayClient = cfg.entryway
-      ? new Client(
-          { service: cfg.entryway.url },
-          {
-            // Trust internal services to send us well-formed responses
-            strictResponseProcessing: false,
-            validateResponse: cfg.service.devMode,
-          },
-        )
+      ? new Client({
+          handler: simpleFetchHandler({ service: cfg.entryway.url }),
+        })
       : undefined;
     const entrywayAdminClient =
       cfg.entryway && secrets.entrywayAdminToken
-        ? new Client(
-            { service: cfg.entryway.url },
-            {
-              headers: {
-                authorization: basicAuthHeader(
-                  'admin',
-                  secrets.entrywayAdminToken,
-                ),
-              },
-              // Trust internal services to send us well-formed responses
-              strictResponseProcessing: false,
-              validateResponse: cfg.service.devMode,
-            },
-          )
+        ? new Client({
+            handler: withAuthHeader(
+              simpleFetchHandler({ service: cfg.entryway.url }),
+              basicAuthHeader('admin', secrets.entrywayAdminToken),
+            ),
+          })
         : undefined;
 
     const jwtSecretKey = createSecretKeyObject(secrets.jwtSecret);
@@ -515,18 +495,18 @@ export class AppContext {
     return this.serviceAuthHeaders(did, this.bskyAppView.did, lxm);
   }
 
-  async entrywayAuthHeaders(req: express.Request, did: string, lxm: string) {
+  async entrywayAuthHeaders(request: Request, did: string, lxm: string) {
     assert(this.cfg.entryway);
     const headers = await this.serviceAuthHeaders(
       did,
       this.cfg.entryway.did,
       lxm,
     );
-    return forwardedFor(req, headers);
+    return forwardedFor(clientIpFromRequest(request), headers);
   }
 
-  entrywayPassthruHeaders(req: express.Request) {
-    return forwardedFor(req, authPassthru(req));
+  entrywayPassthruHeaders(request: Request) {
+    return forwardedFor(clientIpFromRequest(request), authPassthru(request));
   }
 
   async serviceAuthHeaders(did: string, aud: string, lxm: string) {
@@ -555,6 +535,19 @@ const basicAuthHeader = (username: string, password: string) => {
     'base64',
   );
   return `Basic ${encoded}`;
+};
+
+const withAuthHeader = (
+  handler: FetchHandler,
+  authorization: string,
+): FetchHandler => {
+  return (pathname, init) => {
+    const headers = new Headers(init.headers);
+    if (!headers.has('authorization')) {
+      headers.set('authorization', authorization);
+    }
+    return handler(pathname, { ...init, headers });
+  };
 };
 
 export default AppContext;

@@ -1,5 +1,4 @@
 import assert from 'node:assert';
-import { KeyObject } from 'node:crypto';
 import * as jose from 'jose';
 import * as ui8 from 'uint8arrays';
 import * as crypto from '@atproto/crypto';
@@ -20,7 +19,7 @@ export type RefreshToken = AuthToken & {
 
 export const createTokens = async (opts: {
   did: string;
-  jwtKey: KeyObject;
+  jwtKey: jose.KeyLike | Uint8Array;
   serviceDid: string;
   scope?: AuthScope;
   jti?: string;
@@ -36,7 +35,7 @@ export const createTokens = async (opts: {
 
 export const createAccessToken = (opts: {
   did: string;
-  jwtKey: KeyObject;
+  jwtKey: jose.KeyLike | Uint8Array;
   serviceDid: string;
   scope?: AuthScope;
   expiresIn?: string | number;
@@ -62,7 +61,7 @@ export const createAccessToken = (opts: {
 
 export const createRefreshToken = (opts: {
   did: string;
-  jwtKey: KeyObject;
+  jwtKey: jose.KeyLike | Uint8Array;
   serviceDid: string;
   jti?: string;
   expiresIn?: string | number;
