@@ -29,12 +29,15 @@ export type BlobMetadata = {
 }
 
 export class BlobTransactor extends BlobReader {
+  backgroundQueue: BackgroundQueue
+
   constructor(
-    public db: ActorDb,
-    public blobstore: BlobStore,
-    public backgroundQueue: BackgroundQueue,
+    db: ActorDb,
+    blobstore: BlobStore,
+    backgroundQueue: BackgroundQueue,
   ) {
     super(db, blobstore)
+    this.backgroundQueue = backgroundQueue
   }
 
   async insertBlobs(recordUri: string, blobs: Iterable<BlobRef>) {

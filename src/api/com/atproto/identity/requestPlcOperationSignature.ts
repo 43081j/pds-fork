@@ -1,5 +1,5 @@
 import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { ACCESS_FULL, AuthScope } from '../../../../auth-scope.js'
+import { ACCESS_FULL } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 
@@ -9,7 +9,7 @@ export default function (server: Server, ctx: AppContext) {
   const auth = ctx.authVerifier.authorization({
     // @NOTE Reflect any change in signPlcOperation
     scopes: ACCESS_FULL,
-    additional: [AuthScope.Takendown],
+    additional: ['com.atproto.takendown'],
     authorize: (permissions) => {
       permissions.assertIdentity({ attr: '*' })
     },

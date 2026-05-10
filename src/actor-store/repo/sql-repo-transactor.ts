@@ -7,13 +7,15 @@ import { SqlRepoReader } from './sql-repo-reader.js'
 export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
   cache = new BlockMap()
   now: string
+  did: string
 
   constructor(
-    public db: ActorDb,
-    public did: string,
+    db: ActorDb,
+    did: string,
     now?: string,
   ) {
     super(db)
+    this.did = did
     this.now = now ?? new Date().toISOString()
   }
 

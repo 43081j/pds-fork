@@ -13,7 +13,7 @@ export type AuthToken = {
   exp: number
 }
 
-export type RefreshToken = AuthToken & { scope: AuthScope.Refresh; jti: string }
+export type RefreshToken = AuthToken & { scope: 'com.atproto.refresh'; jti: string }
 
 export const createTokens = async (opts: {
   did: string
@@ -42,7 +42,7 @@ export const createAccessToken = (opts: {
     did,
     jwtKey,
     serviceDid,
-    scope = AuthScope.Access,
+    scope = 'com.atproto.access',
     expiresIn = '120mins',
   } = opts
   const signer = new jose.SignJWT({ scope })
@@ -71,7 +71,7 @@ export const createRefreshToken = (opts: {
     jti = getRefreshTokenId(),
     expiresIn = '90days',
   } = opts
-  const signer = new jose.SignJWT({ scope: AuthScope.Refresh })
+  const signer = new jose.SignJWT({ scope: 'com.atproto.refresh' })
     .setProtectedHeader({
       typ: 'refresh+jwt',
       alg: 'HS256', // only symmetric keys supported
@@ -87,7 +87,7 @@ export const createRefreshToken = (opts: {
 // @NOTE unsafe for verification, should only be used w/ direct output from createRefreshToken() or createTokens()
 export const decodeRefreshToken = (jwt: string) => {
   const token = jose.decodeJwt(jwt)
-  assert.ok(token.scope === AuthScope.Refresh, 'not a refresh token')
+  assert.ok(token.scope === 'com.atproto.refresh', 'not a refresh token')
   return token as RefreshToken
 }
 
@@ -212,11 +212,11 @@ export const formatScope = (
   appPassword: AppPassDescript | null,
   isSoftDeleted?: boolean,
 ): AuthScope => {
-  if (isSoftDeleted) return AuthScope.Takendown
-  if (!appPassword) return AuthScope.Access
+  if (isSoftDeleted) return 'com.atproto.takendown'
+  if (!appPassword) return 'com.atproto.access'
   return appPassword.privileged
-    ? AuthScope.AppPassPrivileged
-    : AuthScope.AppPass
+    ? 'com.atproto.appPassPrivileged'
+    : 'com.atproto.appPass'
 }
 
 export class ConcurrentRefreshError extends Error {}

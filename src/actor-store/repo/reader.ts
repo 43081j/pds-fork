@@ -9,11 +9,12 @@ export class RepoReader {
   blob: BlobReader
   record: RecordReader
   storage: SqlRepoReader
+  db: ActorDb
+  blobstore: BlobStore
 
-  constructor(
-    public db: ActorDb,
-    public blobstore: BlobStore,
-  ) {
+  constructor(db: ActorDb, blobstore: BlobStore) {
+    this.db = db
+    this.blobstore = blobstore
     this.blob = new BlobReader(db, blobstore)
     this.record = new RecordReader(db)
     this.storage = new SqlRepoReader(db)

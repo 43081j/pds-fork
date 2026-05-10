@@ -2,7 +2,6 @@ import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax'
 import { InvalidRequestError, Server } from '@atproto/xrpc-server'
 import { formatAccountStatus } from '../../../../account-manager/account-manager.js'
 import { AccessOutput, OAuthOutput } from '../../../../auth-output.js'
-import { AuthScope } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 import { didDocForSession } from './util.js'
@@ -10,7 +9,7 @@ import { didDocForSession } from './util.js'
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.getSession, {
     auth: ctx.authVerifier.authorization({
-      additional: [AuthScope.SignupQueued],
+      additional: ['com.atproto.signupQueued'],
       authorize: () => {
         // Always allowed. "email" access is checked in the handler.
       },

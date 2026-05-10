@@ -57,7 +57,6 @@ import { Sequencer, syncEvtDataFromCommit } from '../sequencer/index.js'
 import { AccountManager, InvalidPasswordError } from './account-manager.js'
 import * as schemas from './db/schema/index.js'
 import * as accountHelper from './helpers/account.js'
-import { AccountStatus } from './helpers/account.js'
 import * as accountDeviceHelper from './helpers/account-device.js'
 import * as authRequestHelper from './helpers/authorization-request.js'
 import * as authorizedClientHelper from './helpers/authorized-client.js'
@@ -75,18 +74,40 @@ import * as usedRefreshTokenHelper from './helpers/used-refresh-token.js'
 export class OAuthStore
   implements AccountStore, RequestStore, DeviceStore, LexiconStore, TokenStore
 {
+  private readonly accountManager: AccountManager
+  private readonly actorStore: ActorStore
+  private readonly imageUrlBuilder: ImageUrlBuilder
+  private readonly backgroundQueue: BackgroundQueue
+  private readonly mailer: ServerMailer
+  private readonly sequencer: Sequencer
+  private readonly plcClient: Client
+  private readonly plcRotationKey: Keypair
+  private readonly publicUrl: string
+  private readonly recoveryDidKey: string | null
+
   constructor(
-    private readonly accountManager: AccountManager,
-    private readonly actorStore: ActorStore,
-    private readonly imageUrlBuilder: ImageUrlBuilder,
-    private readonly backgroundQueue: BackgroundQueue,
-    private readonly mailer: ServerMailer,
-    private readonly sequencer: Sequencer,
-    private readonly plcClient: Client,
-    private readonly plcRotationKey: Keypair,
-    private readonly publicUrl: string,
-    private readonly recoveryDidKey: string | null,
-  ) {}
+    accountManager: AccountManager,
+    actorStore: ActorStore,
+    imageUrlBuilder: ImageUrlBuilder,
+    backgroundQueue: BackgroundQueue,
+    mailer: ServerMailer,
+    sequencer: Sequencer,
+    plcClient: Client,
+    plcRotationKey: Keypair,
+    publicUrl: string,
+    recoveryDidKey: string | null,
+  ) {
+    this.accountManager = accountManager
+    this.actorStore = actorStore
+    this.imageUrlBuilder = imageUrlBuilder
+    this.backgroundQueue = backgroundQueue
+    this.mailer = mailer
+    this.sequencer = sequencer
+    this.plcClient = plcClient
+    this.plcRotationKey = plcRotationKey
+    this.publicUrl = publicUrl
+    this.recoveryDidKey = recoveryDidKey
+  }
 
   private get db() {
     const { db } = this.accountManager
@@ -180,7 +201,7 @@ export class OAuthStore
         })
         try {
           await this.sequencer.sequenceIdentityEvt(did, handle)
-          await this.sequencer.sequenceAccountEvt(did, AccountStatus.Active)
+          await this.sequencer.sequenceAccountEvt(did, 'active')
           await this.sequencer.sequenceCommit(did, commit)
           await this.sequencer.sequenceSyncEvt(
             did,

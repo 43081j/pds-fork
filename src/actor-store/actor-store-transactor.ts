@@ -9,13 +9,22 @@ export class ActorStoreTransactor {
   public readonly record: RecordTransactor
   public readonly repo: RepoTransactor
   public readonly pref: PreferenceTransactor
+  public readonly did: string
+  protected readonly db: ActorDb
+  protected readonly keypair: Keypair
+  protected readonly resources: ActorStoreResources
 
   constructor(
-    public readonly did: string,
-    protected readonly db: ActorDb,
-    protected readonly keypair: Keypair,
-    protected readonly resources: ActorStoreResources,
+    did: string,
+    db: ActorDb,
+    keypair: Keypair,
+    resources: ActorStoreResources,
   ) {
+    this.did = did
+    this.db = db
+    this.keypair = keypair
+    this.resources = resources
+
     const blobstore = resources.blobstore(did)
 
     this.record = new RecordTransactor(db, blobstore)

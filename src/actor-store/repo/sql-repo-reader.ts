@@ -13,9 +13,11 @@ import { ActorDb } from '../db/index.js'
 
 export class SqlRepoReader extends ReadableBlockstore {
   cache: BlockMap = new BlockMap()
+  db: ActorDb
 
-  constructor(public db: ActorDb) {
+  constructor(db: ActorDb) {
     super()
+    this.db = db
   }
 
   async getRoot(): Promise<Cid> {

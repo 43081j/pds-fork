@@ -8,10 +8,13 @@ import { com } from '../../lexicons.js'
 import { ActorDb } from '../db/index.js'
 
 export class BlobReader {
-  constructor(
-    public db: ActorDb,
-    public blobstore: BlobStore,
-  ) {}
+  db: ActorDb
+  blobstore: BlobStore
+
+  constructor(db: ActorDb, blobstore: BlobStore) {
+    this.db = db
+    this.blobstore = blobstore
+  }
 
   async getBlobMetadata(
     cid: Cid,

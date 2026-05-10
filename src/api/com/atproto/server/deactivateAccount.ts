@@ -1,5 +1,5 @@
 import { ForbiddenError, Server } from '@atproto/xrpc-server'
-import { ACCESS_FULL, AuthScope } from '../../../../auth-scope.js'
+import { ACCESS_FULL } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 
@@ -7,7 +7,7 @@ export default function (server: Server, ctx: AppContext) {
   const { entrywayClient } = ctx
 
   const auth = ctx.authVerifier.authorization({
-    additional: [AuthScope.Takendown],
+    additional: ['com.atproto.takendown'],
     scopes: ACCESS_FULL,
     authorize: () => {
       throw new ForbiddenError(

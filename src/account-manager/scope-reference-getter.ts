@@ -21,8 +21,10 @@ export class ScopeReferenceGetter extends CachedGetter<
   ScopeReference,
   OAuthScope
 > {
+  protected readonly entryway: Client
+
   constructor(
-    protected readonly entryway: Client,
+    entryway: Client,
     redis?: Redis,
   ) {
     super(
@@ -48,6 +50,7 @@ export class ScopeReferenceGetter extends CachedGetter<
           })
         : new SimpleStoreMemory({ max: 1000 }),
     )
+    this.entryway = entryway
   }
 
   protected async fetchDereferencedScope(

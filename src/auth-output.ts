@@ -39,7 +39,7 @@ export type RefreshOutput = {
   credentials: {
     type: 'refresh'
     did: DidString
-    scope: AuthScope.Refresh
+    scope: 'com.atproto.refresh'
     tokenId: string
   }
 }

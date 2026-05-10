@@ -7,11 +7,11 @@ import { ActorDb, Backlink } from '../db/index.js'
 import { RecordReader, getBacklinks } from './reader.js'
 
 export class RecordTransactor extends RecordReader {
-  constructor(
-    public db: ActorDb,
-    public blobstore: BlobStore,
-  ) {
+  blobstore: BlobStore
+
+  constructor(db: ActorDb, blobstore: BlobStore) {
     super(db)
+    this.blobstore = blobstore
   }
 
   async indexRecord(

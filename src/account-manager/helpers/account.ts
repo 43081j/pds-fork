@@ -24,13 +24,12 @@ export type AvailabilityFlags = {
   includeDeactivated?: boolean
 }
 
-export enum AccountStatus {
-  Active = 'active',
-  Takendown = 'takendown',
-  Suspended = 'suspended',
-  Deleted = 'deleted',
-  Deactivated = 'deactivated',
-}
+export type AccountStatus =
+  | 'active'
+  | 'takendown'
+  | 'suspended'
+  | 'deleted'
+  | 'deactivated'
 
 export const selectAccountQB = (db: AccountDb, flags?: AvailabilityFlags) => {
   const { includeTakenDown = false, includeDeactivated = false } = flags ?? {}
@@ -305,11 +304,11 @@ export const formatAccountStatus = (
   },
 ) => {
   if (!account) {
-    return { active: false, status: AccountStatus.Deleted } as const
+    return { active: false, status: 'deleted' } as const
   } else if (account.takedownRef) {
-    return { active: false, status: AccountStatus.Takendown } as const
+    return { active: false, status: 'takendown' } as const
   } else if (account.deactivatedAt) {
-    return { active: false, status: AccountStatus.Deactivated } as const
+    return { active: false, status: 'deactivated' } as const
   } else {
     return { active: true, status: undefined } as const
   }

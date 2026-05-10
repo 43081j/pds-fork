@@ -10,7 +10,6 @@ import {
   InvalidRequestError,
   Server,
 } from '@atproto/xrpc-server'
-import { AccountStatus } from '../../../../account-manager/account-manager.js'
 import { NEW_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js'
 import { AppContext } from '../../../../context.js'
 import { baseNormalizeAndValidate } from '../../../../handle/index.js'
@@ -83,7 +82,7 @@ export default function (server: Server, ctx: AppContext) {
 
         if (!deactivated) {
           await ctx.sequencer.sequenceIdentityEvt(did, handle)
-          await ctx.sequencer.sequenceAccountEvt(did, AccountStatus.Active)
+          await ctx.sequencer.sequenceAccountEvt(did, 'active')
           await ctx.sequencer.sequenceCommit(did, commit)
           await ctx.sequencer.sequenceSyncEvt(
             did,

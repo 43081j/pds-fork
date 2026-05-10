@@ -10,7 +10,6 @@ import {
 import { Cid } from '@atproto/lex-data'
 import { currentDatetimeString, isValidTld } from '@atproto/syntax'
 import { AuthRequiredError, InvalidRequestError } from '@atproto/xrpc-server'
-import { AuthScope } from '../auth-scope.js'
 import { softDeleted } from '../db/index.js'
 import { hasExplicitSlur } from '../handle/explicit-slurs.js'
 import {
@@ -45,11 +44,14 @@ export { AccountStatus, formatAccountStatus } from './helpers/account.js'
  * packages/pds/tests/auth.test.ts)
  */
 export class InvalidPasswordError extends AuthRequiredError {
+  readonly did: string
+
   constructor(
-    public readonly did: string,
+    did: string,
     errorMessage = 'Invalid identifier or password',
   ) {
     super(errorMessage)
+    this.did = did
   }
 }
 
@@ -60,14 +62,22 @@ export type AccountManagerDbConfig = {
 
 export class AccountManager {
   readonly db: AccountDb
+  readonly idResolver: IdResolver
+  readonly jwtKey: KeyObject
+  readonly serviceDid: string
+  readonly serviceHandleDomains: string[]
 
   constructor(
-    readonly idResolver: IdResolver,
-    readonly jwtKey: KeyObject,
-    readonly serviceDid: string,
-    readonly serviceHandleDomains: string[],
+    idResolver: IdResolver,
+    jwtKey: KeyObject,
+    serviceDid: string,
+    serviceHandleDomains: string[],
     db: AccountManagerDbConfig,
   ) {
+    this.idResolver = idResolver
+    this.jwtKey = jwtKey
+    this.serviceDid = serviceDid
+    this.serviceHandleDomains = serviceHandleDomains
     this.db = getDb(db.accountDbLoc, db.disableWalAutoCheckpoint)
   }
 
@@ -127,7 +137,7 @@ export class AccountManager {
     })
 
     const res = account.formatAccountStatus(got)
-    return res.active ? AccountStatus.Active : res.status
+    return res.active ? 'active' : res.status
   }
 
   async normalizeAndValidateHandle(
@@ -249,7 +259,7 @@ export class AccountManager {
       did: opts.did,
       jwtKey: this.jwtKey,
       serviceDid: this.serviceDid,
-      scope: AuthScope.Access,
+      scope: 'com.atproto.access',
     })
 
     await this.createAccount({ ...opts, refreshJwt })

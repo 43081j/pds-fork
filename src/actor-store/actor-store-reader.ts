@@ -10,13 +10,21 @@ export class ActorStoreReader {
   public readonly repo: RepoReader
   public readonly record: RecordReader
   public readonly pref: PreferenceReader
+  public readonly did: string
+  protected readonly db: ActorDb
+  protected readonly resources: ActorStoreResources
+  public readonly keypair: () => Promise<Keypair>
 
   constructor(
-    public readonly did: string,
-    protected readonly db: ActorDb,
-    protected readonly resources: ActorStoreResources,
-    public readonly keypair: () => Promise<Keypair>,
+    did: string,
+    db: ActorDb,
+    resources: ActorStoreResources,
+    keypair: () => Promise<Keypair>,
   ) {
+    this.did = did
+    this.db = db
+    this.resources = resources
+
     const blobstore = resources.blobstore(did)
 
     this.repo = new RepoReader(db, blobstore)

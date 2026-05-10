@@ -17,11 +17,15 @@ import { ActorDb, getDb, getMigrator } from './db/index.js'
 
 export class ActorStore {
   reservedKeyDir: string
+  cfg: ActorStoreConfig
+  resources: ActorStoreResources
 
   constructor(
-    public cfg: ActorStoreConfig,
-    public resources: ActorStoreResources,
+    cfg: ActorStoreConfig,
+    resources: ActorStoreResources,
   ) {
+    this.cfg = cfg
+    this.resources = resources
     this.reservedKeyDir = path.join(cfg.directory, 'reserved_keys')
   }
 

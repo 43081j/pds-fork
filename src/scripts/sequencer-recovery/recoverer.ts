@@ -10,10 +10,7 @@ import {
   parseDataKey,
   readCar,
 } from '@atproto/repo'
-import {
-  AccountManager,
-  AccountStatus,
-} from '../../account-manager/account-manager.js'
+import { AccountManager } from '../../account-manager/account-manager.js'
 import { ActorStore } from '../../actor-store/actor-store.js'
 import { ActorStoreTransactor } from '../../actor-store/actor-store-transactor.js'
 import { countAll } from '../../db/index.js'
@@ -176,7 +173,7 @@ const processRepoCreation = async (
 
 const processAccountEvt = async (ctx: RecovererContext, evt: AccountEvt) => {
   // do not need to process deactivation/takedowns because we backup account DB as well
-  if (evt.status !== AccountStatus.Deleted) {
+  if (evt.status !== 'deleted') {
     return
   }
   const { directory } = await ctx.actorStore.getLocation(evt.did)

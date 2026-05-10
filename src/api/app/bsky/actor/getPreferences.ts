@@ -1,5 +1,5 @@
 import { Server } from '@atproto/xrpc-server'
-import { AuthScope, isAccessFull } from '../../../../auth-scope.js'
+import { isAccessFull } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { app } from '../../../../lexicons.js'
 import { computeProxyTo, pipethrough } from '../../../../pipethrough.js'
@@ -10,7 +10,7 @@ export default function (server: Server, ctx: AppContext) {
 
   server.add(app.bsky.actor.getPreferences, {
     auth: ctx.authVerifier.authorization({
-      additional: [AuthScope.Takendown],
+      additional: ['com.atproto.takendown'],
       authorize: (permissions, { req }) => {
         const lxm = app.bsky.actor.getPreferences.$lxm
         const aud = computeProxyTo(ctx, req, lxm)

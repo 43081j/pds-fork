@@ -1,6 +1,5 @@
 import { xrpc } from '@atproto/lex'
 import { Server } from '@atproto/xrpc-server'
-import { AuthScope } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 import { computeProxyTo, parseProxyInfo } from '../../../../pipethrough.js'
@@ -8,7 +7,7 @@ import { computeProxyTo, parseProxyInfo } from '../../../../pipethrough.js'
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.moderation.createReport, {
     auth: ctx.authVerifier.authorization({
-      additional: [AuthScope.Takendown],
+      additional: ['com.atproto.takendown'],
       authorize: (permissions, { req }) => {
         const lxm = com.atproto.moderation.createReport.$lxm
         const aud = computeProxyTo(ctx, req, lxm)

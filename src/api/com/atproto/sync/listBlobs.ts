@@ -1,5 +1,4 @@
 import { Server } from '@atproto/xrpc-server'
-import { AuthScope } from '../../../../auth-scope.js'
 import { isUserOrAdmin } from '../../../../auth-verifier.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
@@ -8,7 +7,7 @@ import { assertRepoAvailability } from './util.js'
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.sync.listBlobs, {
     auth: ctx.authVerifier.authorizationOrAdminTokenOptional({
-      additional: [AuthScope.Takendown],
+      additional: ['com.atproto.takendown'],
       authorize: () => {
         // always allow
       },

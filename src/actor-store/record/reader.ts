@@ -20,7 +20,11 @@ export type RecordDescript = {
 }
 
 export class RecordReader {
-  constructor(public db: ActorDb) {}
+  db: ActorDb
+
+  constructor(db: ActorDb) {
+    this.db = db
+  }
 
   async recordCount(): Promise<number> {
     const res = await this.db.db

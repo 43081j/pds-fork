@@ -1,7 +1,6 @@
 import { getNotif } from '@atproto/identity'
 import { xrpc } from '@atproto/lex'
 import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AuthScope } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { app } from '../../../../lexicons.js'
 import { getDidDoc } from '../util/resolver.js'
@@ -12,7 +11,7 @@ export default function (server: Server, ctx: AppContext) {
 
   server.add(app.bsky.notification.registerPush, {
     auth: ctx.authVerifier.authorization({
-      additional: [AuthScope.SignupQueued],
+      additional: ['com.atproto.signupQueued'],
       authorize: () => {
         // @NOTE this endpoint predates generic service proxying but we want to
         // map the permission to the "RPC" scope for consistency. However, since

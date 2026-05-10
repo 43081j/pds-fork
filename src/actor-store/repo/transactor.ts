@@ -23,16 +23,24 @@ export class RepoTransactor extends RepoReader {
   blob: BlobTransactor
   record: RecordTransactor
   storage: SqlRepoTransactor
+  did: string
+  signingKey: crypto.Keypair
+  backgroundQueue: BackgroundQueue
+  now: string
 
   constructor(
-    public db: ActorDb,
-    public blobstore: BlobStore,
-    public did: string,
-    public signingKey: crypto.Keypair,
-    public backgroundQueue: BackgroundQueue,
-    public now: string = new Date().toISOString(),
+    db: ActorDb,
+    blobstore: BlobStore,
+    did: string,
+    signingKey: crypto.Keypair,
+    backgroundQueue: BackgroundQueue,
+    now: string = new Date().toISOString(),
   ) {
     super(db, blobstore)
+    this.did = did
+    this.signingKey = signingKey
+    this.backgroundQueue = backgroundQueue
+    this.now = now
     this.blob = new BlobTransactor(db, blobstore, backgroundQueue)
     this.record = new RecordTransactor(db, blobstore)
     this.storage = new SqlRepoTransactor(db, did, now)

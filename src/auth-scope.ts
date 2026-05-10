@@ -1,24 +1,30 @@
 // @TODO sync-up with current method names, consider backwards compat.
-export enum AuthScope {
-  Access = 'com.atproto.access',
-  Refresh = 'com.atproto.refresh',
-  AppPass = 'com.atproto.appPass',
-  AppPassPrivileged = 'com.atproto.appPassPrivileged',
-  SignupQueued = 'com.atproto.signupQueued',
-  Takendown = 'com.atproto.takendown',
-}
+export type AuthScope =
+  | 'com.atproto.access'
+  | 'com.atproto.refresh'
+  | 'com.atproto.appPass'
+  | 'com.atproto.appPassPrivileged'
+  | 'com.atproto.signupQueued'
+  | 'com.atproto.takendown'
 
-export const ACCESS_FULL = [AuthScope.Access] as const
+export const ACCESS_FULL = ['com.atproto.access'] as const
 export const ACCESS_PRIVILEGED = [
   ...ACCESS_FULL,
-  AuthScope.AppPassPrivileged,
+  'com.atproto.appPassPrivileged',
 ] as const
 export const ACCESS_STANDARD = [
   ...ACCESS_PRIVILEGED,
-  AuthScope.AppPass,
+  'com.atproto.appPass',
 ] as const
 
-const authScopesValues = new Set(Object.values(AuthScope))
+const authScopesValues = new Set<AuthScope>([
+  'com.atproto.access',
+  'com.atproto.refresh',
+  'com.atproto.appPass',
+  'com.atproto.appPassPrivileged',
+  'com.atproto.signupQueued',
+  'com.atproto.takendown',
+])
 export function isAuthScope(val: unknown): val is AuthScope {
   return (authScopesValues as Set<unknown>).has(val)
 }
@@ -35,6 +41,6 @@ export function isAccessPrivileged(
   return (ACCESS_PRIVILEGED as readonly string[]).includes(scope)
 }
 
-export function isTakendown(scope: unknown): scope is AuthScope.Takendown {
-  return scope === AuthScope.Takendown
+export function isTakendown(scope: unknown): scope is 'com.atproto.takendown' {
+  return scope === 'com.atproto.takendown'
 }

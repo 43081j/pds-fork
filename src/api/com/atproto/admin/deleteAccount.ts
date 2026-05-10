@@ -1,5 +1,4 @@
 import { Server } from '@atproto/xrpc-server'
-import { AccountStatus } from '../../../../account-manager/account-manager.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 
@@ -12,7 +11,7 @@ export default function (server: Server, ctx: AppContext) {
       await ctx.accountManager.deleteAccount(did)
       const accountSeq = await ctx.sequencer.sequenceAccountEvt(
         did,
-        AccountStatus.Deleted,
+        'deleted',
       )
       await ctx.sequencer.deleteAllForUser(did, [accountSeq])
     },

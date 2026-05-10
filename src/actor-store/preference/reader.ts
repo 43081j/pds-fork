@@ -3,7 +3,11 @@ import { ActorDb } from '../db/index.js'
 import { PrefAllowedOptions, getAgeFromDatestring, prefAllowed } from './util.js'
 
 export class PreferenceReader {
-  constructor(public db: ActorDb) {}
+  db: ActorDb
+
+  constructor(db: ActorDb) {
+    this.db = db
+  }
 
   async getPreferences(
     namespace: string,

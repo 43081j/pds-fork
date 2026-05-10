@@ -182,8 +182,8 @@ export class AuthVerifier {
       scopes:
         // @NOTE We can reject taken down credentials based on the scope if
         // "checkTakedown" is set.
-        statusOptions.checkTakedown && scopes.includes(AuthScope.Takendown as S)
-          ? scopes.filter((s) => s !== AuthScope.Takendown)
+        statusOptions.checkTakedown && scopes.includes('com.atproto.takendown' as S)
+          ? scopes.filter((s) => s !== 'com.atproto.takendown')
           : scopes,
     }
 
@@ -206,12 +206,12 @@ export class AuthVerifier {
   public refresh(options?: {
     allowExpired?: boolean
   }): MethodAuthVerifier<RefreshOutput> {
-    const verifyOptions: VerifyBearerJwtOptions<AuthScope.Refresh> = {
+    const verifyOptions: VerifyBearerJwtOptions<'com.atproto.refresh'> = {
       clockTolerance: options?.allowExpired ? Infinity : undefined,
       typ: 'refresh+jwt',
       // when using entryway, proxying refresh credentials
       audience: this.dids.entryway ? this.dids.entryway : this.dids.pds,
-      scopes: [AuthScope.Refresh],
+      scopes: ['com.atproto.refresh'],
     }
 
     return async (ctx) => {

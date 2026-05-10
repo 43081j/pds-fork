@@ -105,7 +105,7 @@ export const formatSeqAccountEvt = async (
     did,
     active: status === 'active',
   }
-  if (status !== AccountStatus.Active) {
+  if (status !== 'active') {
     evt.status = status
   }
 
@@ -164,10 +164,10 @@ export const accountEvt = z.object({
   active: z.boolean(),
   status: z
     .enum([
-      AccountStatus.Takendown,
-      AccountStatus.Suspended,
-      AccountStatus.Deleted,
-      AccountStatus.Deactivated,
+      'takendown',
+      'suspended',
+      'deleted',
+      'deactivated',
     ])
     .optional(),
 })

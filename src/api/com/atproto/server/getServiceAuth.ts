@@ -5,11 +5,7 @@ import {
   Server,
   createServiceJwt,
 } from '@atproto/xrpc-server'
-import {
-  AuthScope,
-  isAccessPrivileged,
-  isTakendown,
-} from '../../../../auth-scope.js'
+import { isAccessPrivileged, isTakendown } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 import { PRIVILEGED_METHODS, PROTECTED_METHODS } from '../../../../pipethrough.js'
@@ -19,7 +15,7 @@ export default function (server: Server, ctx: AppContext) {
     auth: ctx.authVerifier.authorization<
       l.InferMethodParams<typeof com.atproto.server.getServiceAuth.main>
     >({
-      additional: [AuthScope.Takendown],
+      additional: ['com.atproto.takendown'],
       authorize: (permissions, { params }) => {
         const { aud, lxm = '*' } = params
         permissions.assertRpc({ aud, lxm })

@@ -1,5 +1,4 @@
 import { ForbiddenError, Server } from '@atproto/xrpc-server'
-import { AuthScope } from '../../../../auth-scope.js'
 import { AppContext } from '../../../../context.js'
 import { com } from '../../../../lexicons.js'
 
@@ -7,7 +6,7 @@ import { com } from '../../../../lexicons.js'
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.temp.checkSignupQueue, {
     auth: ctx.authVerifier.authorization({
-      additional: [AuthScope.SignupQueued],
+      additional: ['com.atproto.signupQueued'],
       authorize: () => {
         throw new ForbiddenError(
           'OAuth credentials are not supported for this endpoint',

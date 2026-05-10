@@ -21,8 +21,11 @@ const DEFAULT_PRAGMAS = {
 export class Database<Schema> {
   destroyed = false
   commitHooks: CommitHook[] = []
+  db: Kysely<Schema>
 
-  constructor(public db: Kysely<Schema>) {}
+  constructor(db: Kysely<Schema>) {
+    this.db = db
+  }
 
   static sqlite<T>(
     location: string,
