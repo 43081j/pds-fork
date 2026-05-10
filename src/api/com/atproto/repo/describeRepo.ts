@@ -1,31 +1,31 @@
-import * as id from '@atproto/identity'
-import { HandleString, INVALID_HANDLE } from '@atproto/syntax'
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { assertRepoAvailability } from '../sync/util.js'
+import * as id from '@atproto/identity';
+import { HandleString, INVALID_HANDLE } from '@atproto/syntax';
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { assertRepoAvailability } from '../sync/util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(
     com.atproto.repo.describeRepo,
     async ({ params }): Promise<com.atproto.repo.describeRepo.$Output> => {
-      const { repo } = params
+      const { repo } = params;
 
-      const account = await assertRepoAvailability(ctx, repo, false)
+      const account = await assertRepoAvailability(ctx, repo, false);
 
-      let didDoc: id.DidDocument
+      let didDoc: id.DidDocument;
       try {
-        didDoc = await ctx.idResolver.did.ensureResolve(account.did)
+        didDoc = await ctx.idResolver.did.ensureResolve(account.did);
       } catch (err) {
-        throw new InvalidRequestError(`Could not resolve DID: ${err}`)
+        throw new InvalidRequestError(`Could not resolve DID: ${err}`);
       }
 
-      const handle = id.getHandle(didDoc)
-      const handleIsCorrect = handle === account.handle
+      const handle = id.getHandle(didDoc);
+      const handleIsCorrect = handle === account.handle;
 
       const collections = await ctx.actorStore.read(account.did, (store) =>
         store.record.listCollections(),
-      )
+      );
 
       return {
         encoding: 'application/json' as const,
@@ -37,7 +37,7 @@ export default function (server: Server, ctx: AppContext) {
           collections,
           handleIsCorrect,
         },
-      }
+      };
     },
-  )
+  );
 }

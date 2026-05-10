@@ -1,78 +1,82 @@
-import stream from 'node:stream'
-import { Cid, parseCid } from '@atproto/lex-data'
-import { BlobNotFoundError, BlobStore } from '@atproto/repo'
-import { AtUriString } from '@atproto/syntax'
-import { InvalidRequestError } from '@atproto/xrpc-server'
-import { countAll, countDistinct, notSoftDeletedClause } from '../../db/util.js'
-import { com } from '../../lexicons.js'
-import { ActorDb } from '../db/index.js'
+import stream from 'node:stream';
+import { Cid, parseCid } from '@atproto/lex-data';
+import { BlobNotFoundError, BlobStore } from '@atproto/repo';
+import { AtUriString } from '@atproto/syntax';
+import { InvalidRequestError } from '@atproto/xrpc-server';
+import {
+  countAll,
+  countDistinct,
+  notSoftDeletedClause,
+} from '../../db/util.js';
+import { com } from '../../lexicons.js';
+import { ActorDb } from '../db/index.js';
 
 export class BlobReader {
-  db: ActorDb
-  blobstore: BlobStore
+  db: ActorDb;
+  blobstore: BlobStore;
 
   constructor(db: ActorDb, blobstore: BlobStore) {
-    this.db = db
-    this.blobstore = blobstore
+    this.db = db;
+    this.blobstore = blobstore;
   }
 
   async getBlobMetadata(
     cid: Cid,
   ): Promise<{ size: number; mimeType?: `${string}/${string}` }> {
-    const { ref } = this.db.db.dynamic
+    const { ref } = this.db.db.dynamic;
     const found = await this.db.db
       .selectFrom('blob')
       .selectAll()
       .where('blob.cid', '=', cid.toString())
       .where(notSoftDeletedClause(ref('blob')))
-      .executeTakeFirst()
+      .executeTakeFirst();
     if (!found) {
-      throw new InvalidRequestError('Blob not found')
+      throw new InvalidRequestError('Blob not found');
     }
     return {
       size: found.size,
       mimeType: found.mimeType as `${string}/${string}` | undefined,
-    }
+    };
   }
 
   async getBlob(cid: Cid): Promise<{
-    size: number
-    mimeType?: `${string}/${string}`
-    stream: stream.Readable
+    size: number;
+    mimeType?: `${string}/${string}`;
+    stream: stream.Readable;
   }> {
-    const metadata = await this.getBlobMetadata(cid)
+    const metadata = await this.getBlobMetadata(cid);
     const stream = await this.blobstore.getStream(cid).catch((err) => {
       if (err instanceof BlobNotFoundError) {
-        throw new InvalidRequestError('Blob not found')
+        throw new InvalidRequestError('Blob not found');
       }
-      throw err
-    })
+      throw err;
+    });
 
-    return { ...metadata, stream }
+    return { ...metadata, stream };
   }
 
   async listBlobs(opts: {
-    since?: string
-    cursor?: string
-    limit: number
+    since?: string;
+    cursor?: string;
+    limit: number;
   }): Promise<string[]> {
-    const { since, cursor, limit } = opts
+    const { since, cursor, limit } = opts;
     let builder = this.db.db
       .selectFrom('record_blob')
       .select('blobCid')
       .orderBy('blobCid', 'asc')
       .groupBy('blobCid')
-      .limit(limit)
+      .limit(limit);
     if (since) {
       builder = builder
         .innerJoin('record', 'record.uri', 'record_blob.recordUri')
-        .where('record.repoRev', '>', since)
+        .where('record.repoRev', '>', since);
     }
     if (cursor) {
-      builder = builder.where('blobCid', '>', cursor)
+      builder = builder.where('blobCid', '>', cursor);
     }
-    const res = await builder.execute()
-    return res.map((row) => row.blobCid)
+    const res = await builder.execute();
+    return res.map((row) => row.blobCid);
   }
 
   async getBlobTakedownStatus(
@@ -82,11 +86,11 @@ export class BlobReader {
       .selectFrom('blob')
       .select('takedownRef')
       .where('cid', '=', cid.toString())
-      .executeTakeFirst()
-    if (!res) return null
+      .executeTakeFirst();
+    if (!res) return null;
     return res.takedownRef
       ? { applied: true, ref: res.takedownRef }
-      : { applied: false }
+      : { applied: false };
   }
 
   async hasRecordsForBlob(cid: Cid): Promise<boolean> {
@@ -95,8 +99,8 @@ export class BlobReader {
       .where('blobCid', '=', cid.toString())
       .select('blobCid')
       .limit(1)
-      .executeTakeFirst()
-    return res != null
+      .executeTakeFirst();
+    return res != null;
   }
 
   async getBlobsForRecord(recordUri: string): Promise<string[]> {
@@ -105,32 +109,32 @@ export class BlobReader {
       .innerJoin('record_blob', 'record_blob.blobCid', 'blob.cid')
       .where('recordUri', '=', recordUri)
       .select('blob.cid')
-      .execute()
-    return res.map((row) => row.cid)
+      .execute();
+    return res.map((row) => row.cid);
   }
 
   async blobCount(): Promise<number> {
     const res = await this.db.db
       .selectFrom('blob')
       .select(countAll.as('count'))
-      .executeTakeFirst()
-    return res?.count ?? 0
+      .executeTakeFirst();
+    return res?.count ?? 0;
   }
 
   async recordBlobCount(): Promise<number> {
-    const { ref } = this.db.db.dynamic
+    const { ref } = this.db.db.dynamic;
     const res = await this.db.db
       .selectFrom('record_blob')
       .select(countDistinct(ref('blobCid')).as('count'))
-      .executeTakeFirst()
-    return res?.count ?? 0
+      .executeTakeFirst();
+    return res?.count ?? 0;
   }
 
   async listMissingBlobs(opts: {
-    cursor?: string
-    limit: number
+    cursor?: string;
+    limit: number;
   }): Promise<{ cid: string; recordUri: AtUriString }[]> {
-    const { cursor, limit } = opts
+    const { cursor, limit } = opts;
     let builder = this.db.db
       .selectFrom('record_blob')
       .whereNotExists((qb) =>
@@ -142,19 +146,22 @@ export class BlobReader {
       .selectAll()
       .orderBy('blobCid', 'asc')
       .groupBy('blobCid')
-      .limit(limit)
+      .limit(limit);
     if (cursor) {
-      builder = builder.where('blobCid', '>', cursor)
+      builder = builder.where('blobCid', '>', cursor);
     }
-    const res = await builder.execute()
+    const res = await builder.execute();
     return res.map((row) => ({
       cid: row.blobCid,
       recordUri: row.recordUri as AtUriString,
-    }))
+    }));
   }
 
   async getBlobCids() {
-    const blobRows = await this.db.db.selectFrom('blob').select('cid').execute()
-    return blobRows.map((row) => parseCid(row.cid))
+    const blobRows = await this.db.db
+      .selectFrom('blob')
+      .select('cid')
+      .execute();
+    return blobRows.map((row) => parseCid(row.cid));
   }
 }

@@ -1,30 +1,30 @@
-import express from 'express'
-import { l } from '@atproto/lex'
-import { INVALID_HANDLE } from '@atproto/syntax'
-import { ActorAccount } from '../../../../account-manager/helpers/account.js'
-import { CodeDetail } from '../../../../account-manager/helpers/invite.js'
-import { com } from '../../../../lexicons.js'
+import express from 'express';
+import { l } from '@atproto/lex';
+import { INVALID_HANDLE } from '@atproto/syntax';
+import { ActorAccount } from '../../../../account-manager/helpers/account.js';
+import { CodeDetail } from '../../../../account-manager/helpers/invite.js';
+import { com } from '../../../../lexicons.js';
 
 // Output designed to passed as second arg to AtpAgent methods.
 // The encoding field here is a quirk of the AtpAgent.
 export function authPassthru(
   req: express.Request,
   withEncoding?: false,
-): { headers: { authorization: string }; encoding: undefined } | undefined
+): { headers: { authorization: string }; encoding: undefined } | undefined;
 
 export function authPassthru(
   req: express.Request,
   withEncoding: true,
 ):
   | { headers: { authorization: string }; encoding: 'application/json' }
-  | undefined
+  | undefined;
 
 export function authPassthru(req: express.Request, withEncoding?: boolean) {
   if (req.headers.authorization) {
     return {
       headers: { authorization: req.headers.authorization },
       encoding: withEncoding ? 'application/json' : undefined,
-    }
+    };
   }
 }
 
@@ -35,17 +35,17 @@ export function formatAccountInfo(
     invitedBy,
     invites,
   }: {
-    managesOwnInvites: boolean
-    invites: Map<string, CodeDetail[]> | CodeDetail[]
-    invitedBy: Record<string, CodeDetail>
+    managesOwnInvites: boolean;
+    invites: Map<string, CodeDetail[]> | CodeDetail[];
+    invitedBy: Record<string, CodeDetail>;
   },
 ): com.atproto.admin.defs.AccountView {
-  let invitesResults: CodeDetail[] | undefined
+  let invitesResults: CodeDetail[] | undefined;
   if (managesOwnInvites) {
     if (Array.isArray(invites)) {
-      invitesResults = invites
+      invitesResults = invites;
     } else {
-      invitesResults = invites.get(account.did) || []
+      invitesResults = invites.get(account.did) || [];
     }
   }
   return {
@@ -62,5 +62,5 @@ export function formatAccountInfo(
       : undefined,
     deactivatedAt:
       (account.deactivatedAt as l.DatetimeString | undefined) ?? undefined,
-  }
+  };
 }

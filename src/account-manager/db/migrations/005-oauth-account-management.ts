@@ -1,7 +1,7 @@
-import { Kysely } from 'kysely'
-import { HOUR } from '@atproto/common'
-import { ClientId, DeviceId } from '@atproto/oauth-provider'
-import { DateISO, JsonEncoded, toDateISO } from '../../../db/index.js'
+import { Kysely } from 'kysely';
+import { HOUR } from '@atproto/common';
+import { ClientId, DeviceId } from '@atproto/oauth-provider';
+import { DateISO, JsonEncoded, toDateISO } from '../../../db/index.js';
 
 // @NOTE this migration has been updated to be idempotent through
 // the insertInto('account_device') step. this allows users to roll
@@ -14,23 +14,23 @@ import { DateISO, JsonEncoded, toDateISO } from '../../../db/index.js'
 export async function up(
   db: Kysely<{
     account: {
-      did: string
-    }
+      did: string;
+    };
     device_account: {
-      did: string
-      deviceId: DeviceId
+      did: string;
+      deviceId: DeviceId;
 
-      remember: 0 | 1
-      authenticatedAt: string
-      authorizedClients: JsonEncoded<ClientId[]>
-    }
+      remember: 0 | 1;
+      authenticatedAt: string;
+      authorizedClients: JsonEncoded<ClientId[]>;
+    };
     account_device: {
-      did: string
-      deviceId: DeviceId
+      did: string;
+      deviceId: DeviceId;
 
-      createdAt: DateISO
-      updatedAt: DateISO
-    }
+      createdAt: DateISO;
+      updatedAt: DateISO;
+    };
   }>,
 ): Promise<void> {
   // Security: Delete any leftover device accounts that are not remembered
@@ -39,7 +39,7 @@ export async function up(
     .deleteFrom('device_account')
     .where('remember', '=', 0)
     .where('authenticatedAt', '<', toDateISO(new Date(Date.now() - HOUR)))
-    .execute()
+    .execute();
 
   // replaces "device_account"
   // @NOTE idempotent from ifNotExists(), see note at top of migration.
@@ -70,7 +70,7 @@ export async function up(
       // cascade on delete, future-proofing on update (fk can't be altered)
       (qb) => qb.onDelete('cascade').onUpdate('cascade'),
     )
-    .execute()
+    .execute();
 
   // Migrate "device_account" to "account_device"
   // @NOTE idempotent from onConflict(): see note at top of migration.
@@ -95,7 +95,7 @@ export async function up(
         ),
     )
     .onConflict((oc) => oc.doNothing())
-    .execute()
+    .execute();
 
   // @NOTE No need to create an index on "deviceId" for "account_device" because
   // it is the first column in the primary key constraint
@@ -104,7 +104,7 @@ export async function up(
     .createIndex('account_device_did_idx')
     .on('account_device')
     .column('did')
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('authorized_client')
@@ -122,7 +122,7 @@ export async function up(
       // cascade on delete, future-proofing on update (fk can't be altered)
       (qb) => qb.onDelete('cascade').onUpdate('cascade'),
     )
-    .execute()
+    .execute();
 
   // We don't migrate the "device_account" authorized clients. Users will need
   // to reauthorize the client during the next oauth flow (minor inconvenience
@@ -130,6 +130,6 @@ export async function up(
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('authorized_client').execute()
-  await db.schema.dropTable('account_device').execute()
+  await db.schema.dropTable('authorized_client').execute();
+  await db.schema.dropTable('account_device').execute();
 }

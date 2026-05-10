@@ -1,13 +1,13 @@
-import { Generated } from 'kysely'
-import { com } from '../../lexicons.js'
+import { Generated } from 'kysely';
+import { com } from '../../lexicons.js';
 
-export const actionTableName = 'moderation_action'
-export const actionSubjectBlobTableName = 'moderation_action_subject_blob'
-export const reportTableName = 'moderation_report'
-export const reportResolutionTableName = 'moderation_report_resolution'
+export const actionTableName = 'moderation_action';
+export const actionSubjectBlobTableName = 'moderation_action_subject_blob';
+export const reportTableName = 'moderation_report';
+export const reportResolutionTableName = 'moderation_report_resolution';
 
 export interface ModerationAction {
-  id: Generated<number>
+  id: Generated<number>;
   action:
     | 'tools.ozone.moderation.defs#modEventTakedown'
     | 'tools.ozone.moderation.defs#modEventAcknowledge'
@@ -26,55 +26,55 @@ export interface ModerationAction {
     | 'tools.ozone.moderation.defs#accountEvent'
     | 'tools.ozone.moderation.defs#identityEvent'
     | 'tools.ozone.moderation.defs#recordEvent'
-    | 'tools.ozone.moderation.defs#modEventPriorityScore'
-  subjectType: 'com.atproto.admin.defs#repoRef' | 'com.atproto.repo.strongRef'
-  subjectDid: string
-  subjectUri: string | null
-  subjectCid: string | null
-  createLabelVals: string | null
-  negateLabelVals: string | null
-  comment: string | null
-  createdAt: string
-  createdBy: string
-  durationInHours: number | null
-  expiresAt: string | null
-  meta: Record<string, string | boolean> | null
+    | 'tools.ozone.moderation.defs#modEventPriorityScore';
+  subjectType: 'com.atproto.admin.defs#repoRef' | 'com.atproto.repo.strongRef';
+  subjectDid: string;
+  subjectUri: string | null;
+  subjectCid: string | null;
+  createLabelVals: string | null;
+  negateLabelVals: string | null;
+  comment: string | null;
+  createdAt: string;
+  createdBy: string;
+  durationInHours: number | null;
+  expiresAt: string | null;
+  meta: Record<string, string | boolean> | null;
 }
 
 export interface ModerationActionSubjectBlob {
-  actionId: number
-  cid: string
-  recordUri: string
+  actionId: number;
+  cid: string;
+  recordUri: string;
 }
 
 export interface ModerationReport {
-  id: Generated<number>
-  subjectType: 'com.atproto.admin.defs#repoRef' | 'com.atproto.repo.strongRef'
-  subjectDid: string
-  subjectUri: string | null
-  subjectCid: string | null
+  id: Generated<number>;
+  subjectType: 'com.atproto.admin.defs#repoRef' | 'com.atproto.repo.strongRef';
+  subjectDid: string;
+  subjectUri: string | null;
+  subjectCid: string | null;
   reasonType:
     | com.atproto.moderation.defs.ReasonSpam
     | com.atproto.moderation.defs.ReasonOther
     | com.atproto.moderation.defs.ReasonMisleading
     | com.atproto.moderation.defs.ReasonRude
     | com.atproto.moderation.defs.ReasonSexual
-    | com.atproto.moderation.defs.ReasonViolation
-  reason: string | null
-  reportedByDid: string
-  createdAt: string
+    | com.atproto.moderation.defs.ReasonViolation;
+  reason: string | null;
+  reportedByDid: string;
+  createdAt: string;
 }
 
 export interface ModerationReportResolution {
-  reportId: number
-  actionId: number
-  createdAt: string
-  createdBy: string
+  reportId: number;
+  actionId: number;
+  createdAt: string;
+  createdBy: string;
 }
 
 export type PartialDB = {
-  [actionTableName]: ModerationAction
-  [actionSubjectBlobTableName]: ModerationActionSubjectBlob
-  [reportTableName]: ModerationReport
-  [reportResolutionTableName]: ModerationReportResolution
-}
+  [actionTableName]: ModerationAction;
+  [actionSubjectBlobTableName]: ModerationActionSubjectBlob;
+  [reportTableName]: ModerationReport;
+  [reportResolutionTableName]: ModerationReportResolution;
+};

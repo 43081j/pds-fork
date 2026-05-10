@@ -1,12 +1,12 @@
-import { DAY, HOUR } from '@atproto/common'
+import { DAY, HOUR } from '@atproto/common';
 import {
   ForbiddenError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { ACCESS_FULL } from '../../../../auth-scope.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+} from '@atproto/xrpc-server';
+import { ACCESS_FULL } from '../../../../auth-scope.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.requestAccountDelete, {
@@ -28,17 +28,17 @@ export default function (server: Server, ctx: AppContext) {
       authorize: () => {
         throw new ForbiddenError(
           'OAuth credentials are not supported for this endpoint',
-        )
+        );
       },
     }),
     handler: async ({ auth, req }) => {
-      const did = auth.credentials.did
+      const did = auth.credentials.did;
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
-      })
+      });
       if (!account) {
-        throw new InvalidRequestError('account not found')
+        throw new InvalidRequestError('account not found');
       }
 
       if (ctx.entrywayClient) {
@@ -46,21 +46,21 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.requestAccountDelete.$lxm,
-        )
+        );
         await ctx.entrywayClient.xrpc(com.atproto.server.requestAccountDelete, {
           headers,
-        })
-        return
+        });
+        return;
       }
 
       if (!account.email) {
-        throw new InvalidRequestError('account does not have an email address')
+        throw new InvalidRequestError('account does not have an email address');
       }
       const token = await ctx.accountManager.createEmailToken(
         did,
         'delete_account',
-      )
-      await ctx.mailer.sendAccountDelete({ token }, { to: account.email })
+      );
+      await ctx.mailer.sendAccountDelete({ token }, { to: account.email });
     },
-  })
+  });
 }

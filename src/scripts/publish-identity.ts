@@ -1,45 +1,45 @@
-import assert from 'node:assert'
-import fs from 'node:fs/promises'
-import { wait } from '@atproto/common'
-import { isDidString } from '@atproto/lex'
-import { DidString } from '@atproto/syntax'
-import { Sequencer } from '../sequencer/index.js'
-import { parseIntArg } from './util.js'
+import assert from 'node:assert';
+import fs from 'node:fs/promises';
+import { wait } from '@atproto/common';
+import { isDidString } from '@atproto/lex';
+import { DidString } from '@atproto/syntax';
+import { Sequencer } from '../sequencer/index.js';
+import { parseIntArg } from './util.js';
 
 export type PublishIdentityContext = {
-  sequencer: Sequencer
-}
+  sequencer: Sequencer;
+};
 
 export const publishIdentity = async (
   ctx: PublishIdentityContext,
   args: string[],
 ) => {
-  const dids = args
-  assert(dids.every(isDidString), 'All arguments must be DIDs')
-  await publishIdentityEvtForDids(ctx, dids)
-  console.log('DONE')
-}
+  const dids = args;
+  assert(dids.every(isDidString), 'All arguments must be DIDs');
+  await publishIdentityEvtForDids(ctx, dids);
+  console.log('DONE');
+};
 
 export const publishIdentityFromFile = async (
   ctx: PublishIdentityContext,
   args: string[],
 ) => {
-  const filepath = args[0]
+  const filepath = args[0];
   if (!filepath) {
-    throw new Error('Expected filepath as argument')
+    throw new Error('Expected filepath as argument');
   }
-  const timeBetween = args[1] ? parseIntArg(args[1]) : 5
-  const file = await fs.readFile(filepath)
+  const timeBetween = args[1] ? parseIntArg(args[1]) : 5;
+  const file = await fs.readFile(filepath);
   const dids = file
     .toString()
     .split('\n')
-    .map((did) => did.trim())
+    .map((did) => did.trim());
 
-  assert(dids.every(isDidString), 'File contains invalid DIDs')
+  assert(dids.every(isDidString), 'File contains invalid DIDs');
 
-  await publishIdentityEvtForDids(ctx, dids, timeBetween)
-  console.log('DONE')
-}
+  await publishIdentityEvtForDids(ctx, dids, timeBetween);
+  console.log('DONE');
+};
 
 export const publishIdentityEvtForDids = async (
   ctx: PublishIdentityContext,
@@ -48,13 +48,13 @@ export const publishIdentityEvtForDids = async (
 ) => {
   for (const did of dids) {
     try {
-      await ctx.sequencer.sequenceIdentityEvt(did)
-      console.log(`published identity evt for ${did}`)
+      await ctx.sequencer.sequenceIdentityEvt(did);
+      console.log(`published identity evt for ${did}`);
     } catch (err) {
-      console.error(`failed to sequence new identity evt for ${did}: ${err}`)
+      console.error(`failed to sequence new identity evt for ${did}: ${err}`);
     }
     if (timeBetween > 0) {
-      await wait(timeBetween)
+      await wait(timeBetween);
     }
   }
-}
+};

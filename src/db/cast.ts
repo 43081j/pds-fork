@@ -1,9 +1,9 @@
-export type DateISO = `${string}T${string}Z`
+export type DateISO = `${string}T${string}Z`;
 export function toDateISO(date: Date) {
-  return date.toISOString() as DateISO
+  return date.toISOString() as DateISO;
 }
 export function fromDateISO(dateStr: DateISO) {
-  return new Date(dateStr)
+  return new Date(dateStr);
 }
 
 /**
@@ -16,7 +16,7 @@ export type Encodable =
   | boolean
   | null
   | readonly Encodable[]
-  | { readonly [_ in string]?: Encodable }
+  | { readonly [_ in string]?: Encodable };
 
 export type JsonString<T extends Encodable> = T extends readonly unknown[]
   ? `[${string}]`
@@ -30,23 +30,23 @@ export type JsonString<T extends Encodable> = T extends readonly unknown[]
           ? `true` | `false`
           : T extends null
             ? `null`
-            : never
+            : never;
 
-declare const jsonEncodedType: unique symbol
+declare const jsonEncodedType: unique symbol;
 export type JsonEncoded<T extends Encodable = Encodable> = JsonString<T> & {
-  [jsonEncodedType]: T
-}
+  [jsonEncodedType]: T;
+};
 
 export function toJson<T extends Encodable>(value: T): JsonEncoded<T> {
-  const json = JSON.stringify(value)
-  if (json === undefined) throw new TypeError('Input not JSONifyable')
-  return json as JsonEncoded<T>
+  const json = JSON.stringify(value);
+  if (json === undefined) throw new TypeError('Input not JSONifyable');
+  return json as JsonEncoded<T>;
 }
 
 export function fromJson<T extends Encodable>(jsonStr: JsonEncoded<T>): T {
   try {
-    return JSON.parse(jsonStr) as T
+    return JSON.parse(jsonStr) as T;
   } catch (cause) {
-    throw new TypeError('Database contains invalid JSON', { cause })
+    throw new TypeError('Database contains invalid JSON', { cause });
   }
 }

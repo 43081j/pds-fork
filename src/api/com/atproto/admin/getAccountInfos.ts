@@ -1,7 +1,7 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { formatAccountInfo } from './util.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { formatAccountInfo } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.admin.getAccountInfos, {
@@ -14,21 +14,21 @@ export default function (server: Server, ctx: AppContext) {
         }),
         ctx.accountManager.getAccountsInvitesCodes(params.dids),
         ctx.accountManager.getInvitedByForAccounts(params.dids),
-      ])
+      ]);
 
-      const managesOwnInvites = !ctx.cfg.entryway
+      const managesOwnInvites = !ctx.cfg.entryway;
       const infos = Array.from(accounts.values()).map((account) => {
         return formatAccountInfo(account, {
           managesOwnInvites,
           invitedBy,
           invites,
-        })
-      })
+        });
+      });
 
       return {
         encoding: 'application/json' as const,
         body: { infos },
-      }
+      };
     },
-  })
+  });
 }

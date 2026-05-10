@@ -1,10 +1,10 @@
-import { DAY, HOUR } from '@atproto/common'
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { DAY, HOUR } from '@atproto/common';
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx
+  const { entrywayClient } = ctx;
 
   server.add(com.atproto.server.requestEmailUpdate, {
     rateLimit: [
@@ -22,17 +22,17 @@ export default function (server: Server, ctx: AppContext) {
     auth: ctx.authVerifier.authorization({
       checkTakedown: true,
       authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'email', action: 'manage' })
+        permissions.assertAccount({ attr: 'email', action: 'manage' });
       },
     }),
     handler: async ({ auth, req }) => {
-      const did = auth.credentials.did
+      const did = auth.credentials.did;
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
-      })
+      });
       if (!account) {
-        throw new InvalidRequestError('account not found')
+        throw new InvalidRequestError('account not found');
       }
 
       if (entrywayClient) {
@@ -40,23 +40,23 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.requestEmailUpdate.$lxm,
-        )
+        );
         return entrywayClient.xrpc(com.atproto.server.requestEmailUpdate, {
           headers,
-        })
+        });
       }
 
       if (!account.email) {
-        throw new InvalidRequestError('account does not have an email address')
+        throw new InvalidRequestError('account does not have an email address');
       }
 
-      const tokenRequired = !!account.emailConfirmedAt
+      const tokenRequired = !!account.emailConfirmedAt;
       if (tokenRequired) {
         const token = await ctx.accountManager.createEmailToken(
           did,
           'update_email',
-        )
-        await ctx.mailer.sendUpdateEmail({ token }, { to: account.email })
+        );
+        await ctx.mailer.sendUpdateEmail({ token }, { to: account.email });
       }
 
       return {
@@ -64,7 +64,7 @@ export default function (server: Server, ctx: AppContext) {
         body: {
           tokenRequired,
         },
-      }
+      };
     },
-  })
+  });
 }

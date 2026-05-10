@@ -1,14 +1,14 @@
-import { isEmailValid } from '@hapi/address'
-import { isDisposableEmail } from 'disposable-email-domains-js'
+import { isEmailValid } from '@hapi/address';
+import { isDisposableEmail } from 'disposable-email-domains-js';
 import {
   ForbiddenError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { UserAlreadyExistsError } from '../../../../account-manager/helpers/account.js'
-import { ACCESS_FULL } from '../../../../auth-scope.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+} from '@atproto/xrpc-server';
+import { UserAlreadyExistsError } from '../../../../account-manager/helpers/account.js';
+import { ACCESS_FULL } from '../../../../auth-scope.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.updateEmail, {
@@ -18,22 +18,22 @@ export default function (server: Server, ctx: AppContext) {
       authorize: () => {
         throw new ForbiddenError(
           'OAuth credentials are not supported for this endpoint',
-        )
+        );
       },
     }),
     handler: async ({ auth, input: { body }, req }) => {
-      const did = auth.credentials.did
-      const { token, email } = body
+      const did = auth.credentials.did;
+      const { token, email } = body;
       if (!isEmailValid(email) || isDisposableEmail(email)) {
         throw new InvalidRequestError(
           'This email address is not supported, please use a different email.',
-        )
+        );
       }
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
-      })
+      });
       if (!account) {
-        throw new InvalidRequestError('account not found')
+        throw new InvalidRequestError('account not found');
       }
 
       if (ctx.entrywayClient) {
@@ -41,14 +41,14 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.updateEmail.$lxm,
-        )
+        );
 
         await ctx.entrywayClient.xrpc(com.atproto.server.updateEmail, {
           headers,
           body,
-        })
+        });
 
-        return
+        return;
       }
 
       // require valid token if account email is confirmed
@@ -57,26 +57,26 @@ export default function (server: Server, ctx: AppContext) {
           throw new InvalidRequestError(
             'confirmation token required',
             'TokenRequired',
-          )
+          );
         }
         await ctx.accountManager.assertValidEmailToken(
           did,
           'update_email',
           token,
-        )
+        );
       }
 
       try {
-        await ctx.accountManager.updateEmail({ did, email })
+        await ctx.accountManager.updateEmail({ did, email });
       } catch (err) {
         if (err instanceof UserAlreadyExistsError) {
           throw new InvalidRequestError(
             'This email address is already in use, please use a different email.',
-          )
+          );
         } else {
-          throw err
+          throw err;
         }
       }
     },
-  })
+  });
 }

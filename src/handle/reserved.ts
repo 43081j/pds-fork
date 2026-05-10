@@ -13,7 +13,7 @@ const atpSpecific = [
   'bsky',
   'bluesky',
   'handle',
-]
+];
 
 // naively pulled from: https://radwebhosting.com/client_area/knowledgebase/196/List-of-Banned-Subdomain-Prefixes.html
 const commonlyReserved = [
@@ -858,7 +858,7 @@ const commonlyReserved = [
   'yourname',
   'yoursite',
   'yourusername',
-]
+];
 
 const famousAccounts = [
   // reserving some large twitter accounts (top 100 by followers according to wikidata dump)
@@ -1045,7 +1045,7 @@ const famousAccounts = [
   'portalr7',
   'rede_globo',
   'zerohora',
-]
+];
 
 export const reservedSubdomains: Record<string, boolean> = [
   ...atpSpecific,
@@ -1055,5 +1055,5 @@ export const reservedSubdomains: Record<string, boolean> = [
   return {
     ...acc,
     [cur]: true,
-  }
-}, {})
+  };
+}, {});

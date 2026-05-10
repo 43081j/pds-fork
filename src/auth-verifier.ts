@@ -1,20 +1,20 @@
-import { KeyObject, createPublicKey, createSecretKey } from 'node:crypto'
-import { IncomingMessage, ServerResponse } from 'node:http'
-import * as jose from 'jose'
-import KeyEncoder from 'key-encoder'
-import { getVerificationMaterial } from '@atproto/common'
-import { IdResolver, getDidKeyFromMultibase } from '@atproto/identity'
-import { AtIdentifierString, DidString, isDidString } from '@atproto/lex'
+import { KeyObject, createPublicKey, createSecretKey } from 'node:crypto';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import * as jose from 'jose';
+import KeyEncoder from 'key-encoder';
+import { getVerificationMaterial } from '@atproto/common';
+import { IdResolver, getDidKeyFromMultibase } from '@atproto/identity';
+import { AtIdentifierString, DidString, isDidString } from '@atproto/lex';
 import {
   OAuthError,
   OAuthVerifier,
   VerifyTokenPayloadOptions,
   WWWAuthenticateError,
-} from '@atproto/oauth-provider'
+} from '@atproto/oauth-provider';
 import {
   ScopePermissions,
   ScopePermissionsTransition,
-} from '@atproto/oauth-scopes'
+} from '@atproto/oauth-scopes';
 import {
   AuthRequiredError,
   Awaitable,
@@ -26,9 +26,9 @@ import {
   XRPCError,
   parseReqNsid,
   verifyJwt as verifyServiceJwt,
-} from '@atproto/xrpc-server'
-import { AccountManager } from './account-manager/account-manager.js'
-import { ActorAccount } from './account-manager/helpers/account.js'
+} from '@atproto/xrpc-server';
+import { AccountManager } from './account-manager/account-manager.js';
+import { ActorAccount } from './account-manager/helpers/account.js';
 import {
   AccessOutput,
   AdminTokenOutput,
@@ -37,63 +37,63 @@ import {
   RefreshOutput,
   UnauthenticatedOutput,
   UserServiceAuthOutput,
-} from './auth-output.js'
-import { ACCESS_STANDARD, AuthScope, isAuthScope } from './auth-scope.js'
-import { softDeleted } from './db/index.js'
-import { appendVary } from './util/http.js'
-import { WithRequired } from './util/types.js'
+} from './auth-output.js';
+import { ACCESS_STANDARD, AuthScope, isAuthScope } from './auth-scope.js';
+import { softDeleted } from './db/index.js';
+import { appendVary } from './util/http.js';
+import { WithRequired } from './util/types.js';
 
 export type VerifiedOptions = {
-  checkTakedown?: boolean
-  checkDeactivated?: boolean
-}
+  checkTakedown?: boolean;
+  checkDeactivated?: boolean;
+};
 
 export type ScopedOptions<S extends AuthScope = AuthScope> = {
-  scopes?: readonly S[]
-}
+  scopes?: readonly S[];
+};
 
 export type ExtraScopedOptions<S extends AuthScope = AuthScope> = {
-  additional?: readonly S[]
-}
+  additional?: readonly S[];
+};
 
 export type AuthorizedOptions<P extends Params = Params> = {
   authorize: (
     permissions: ScopePermissions,
     ctx: MethodAuthContext<P>,
-  ) => Awaitable<void>
-}
+  ) => Awaitable<void>;
+};
 
 export type AuthVerifierOpts = {
-  publicUrl: string
-  jwtKey: KeyObject
-  adminPass: string
+  publicUrl: string;
+  jwtKey: KeyObject;
+  adminPass: string;
   dids: {
-    pds: string
-    entryway?: string
-    modService?: string
-  }
-}
+    pds: string;
+    entryway?: string;
+    modService?: string;
+  };
+};
 
 export type VerifyBearerJwtOptions<S extends AuthScope = AuthScope> =
   WithRequired<
     Omit<jose.JWTVerifyOptions, 'scopes'> & {
-      scopes: readonly S[]
+      scopes: readonly S[];
     },
     'audience' | 'typ'
-  >
+  >;
 
 export type VerifyBearerJwtResult<S extends AuthScope = AuthScope> = {
-  sub: DidString
-  aud: string
-  jti: string | undefined
-  scope: S
-}
+  sub: DidString;
+  aud: string;
+  jti: string | undefined;
+  scope: S;
+};
 
 export class AuthVerifier {
-  private _publicUrl: string
-  private _jwtKey: KeyObject
-  private _adminPass: string
-  public dids: AuthVerifierOpts['dids']
+  private _publicUrl: string;
+  private _jwtKey: KeyObject;
+  private _adminPass: string;
+  public dids: AuthVerifierOpts['dids'];
   public accountManager: AccountManager;
   public idResolver: IdResolver;
   public oauthVerifier: OAuthVerifier;
@@ -104,77 +104,77 @@ export class AuthVerifier {
     oauthVerifier: OAuthVerifier,
     opts: AuthVerifierOpts,
   ) {
-    this._publicUrl = opts.publicUrl
-    this._jwtKey = opts.jwtKey
-    this._adminPass = opts.adminPass
-    this.dids = opts.dids
-    this.accountManager = accountManager
-    this.idResolver = idResolver
-    this.oauthVerifier = oauthVerifier
+    this._publicUrl = opts.publicUrl;
+    this._jwtKey = opts.jwtKey;
+    this._adminPass = opts.adminPass;
+    this.dids = opts.dids;
+    this.accountManager = accountManager;
+    this.idResolver = idResolver;
+    this.oauthVerifier = oauthVerifier;
   }
 
   // verifiers (arrow fns to preserve scope)
 
   public unauthenticated: MethodAuthVerifier<UnauthenticatedOutput> = (ctx) => {
-    setAuthHeaders(ctx.res)
+    setAuthHeaders(ctx.res);
 
     // @NOTE this auth method is typically used as fallback when no other auth
     // method is applicable. This means that the presence of an "authorization"
     // header means that that header is invalid (as it did not match any of the
     // other auth methods).
     if (ctx.req.headers['authorization']) {
-      throw new AuthRequiredError('Invalid authorization header')
+      throw new AuthRequiredError('Invalid authorization header');
     }
 
     return {
       credentials: null,
-    }
-  }
+    };
+  };
 
   public adminToken: MethodAuthVerifier<AdminTokenOutput> = async (ctx) => {
-    setAuthHeaders(ctx.res)
-    const parsed = parseBasicAuth(ctx.req)
+    setAuthHeaders(ctx.res);
+    const parsed = parseBasicAuth(ctx.req);
     if (!parsed) {
-      throw new AuthRequiredError()
+      throw new AuthRequiredError();
     }
-    const { username, password } = parsed
+    const { username, password } = parsed;
     if (username !== 'admin' || password !== this._adminPass) {
-      throw new AuthRequiredError()
+      throw new AuthRequiredError();
     }
 
-    return { credentials: { type: 'admin_token' } }
-  }
+    return { credentials: { type: 'admin_token' } };
+  };
 
   public modService: MethodAuthVerifier<ModServiceOutput> = async (ctx) => {
-    setAuthHeaders(ctx.res)
+    setAuthHeaders(ctx.res);
     if (!this.dids.modService) {
-      throw new AuthRequiredError('Untrusted issuer', 'UntrustedIss')
+      throw new AuthRequiredError('Untrusted issuer', 'UntrustedIss');
     }
     const payload = await this.verifyServiceJwt(ctx.req, {
       iss: [this.dids.modService, `${this.dids.modService}#atproto_labeler`],
-    })
+    });
     return {
       credentials: {
         type: 'mod_service',
         did: payload.iss,
       },
-    }
-  }
+    };
+  };
 
   public moderator: MethodAuthVerifier<AdminTokenOutput | ModServiceOutput> =
     async (ctx) => {
-      const type = extractAuthType(ctx.req)
+      const type = extractAuthType(ctx.req);
       if (type === 'Bearer') {
-        return this.modService(ctx)
+        return this.modService(ctx);
       } else {
-        return this.adminToken(ctx)
+        return this.adminToken(ctx);
       }
-    }
+    };
 
   protected access<S extends AuthScope>(
     options: VerifiedOptions & Required<ScopedOptions<S>>,
   ): MethodAuthVerifier<AccessOutput<S>> {
-    const { scopes, ...statusOptions } = options
+    const { scopes, ...statusOptions } = options;
 
     const verifyJwtOptions: VerifyBearerJwtOptions<S> = {
       audience: this.dids.pds,
@@ -182,29 +182,30 @@ export class AuthVerifier {
       scopes:
         // @NOTE We can reject taken down credentials based on the scope if
         // "checkTakedown" is set.
-        statusOptions.checkTakedown && scopes.includes('com.atproto.takendown' as S)
+        statusOptions.checkTakedown &&
+        scopes.includes('com.atproto.takendown' as S)
           ? scopes.filter((s) => s !== 'com.atproto.takendown')
           : scopes,
-    }
+    };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res)
+      setAuthHeaders(ctx.res);
 
       const { sub: did, scope } = await this.verifyBearerJwt(
         ctx.req,
         verifyJwtOptions,
-      )
+      );
 
-      await this.verifyStatus(did, statusOptions)
+      await this.verifyStatus(did, statusOptions);
 
       return {
         credentials: { type: 'access', did, scope },
-      }
-    }
+      };
+    };
   }
 
   public refresh(options?: {
-    allowExpired?: boolean
+    allowExpired?: boolean;
   }): MethodAuthVerifier<RefreshOutput> {
     const verifyOptions: VerifyBearerJwtOptions<'com.atproto.refresh'> = {
       clockTolerance: options?.allowExpired ? Infinity : undefined,
@@ -212,19 +213,19 @@ export class AuthVerifier {
       // when using entryway, proxying refresh credentials
       audience: this.dids.entryway ? this.dids.entryway : this.dids.pds,
       scopes: ['com.atproto.refresh'],
-    }
+    };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res)
+      setAuthHeaders(ctx.res);
 
-      const result = await this.verifyBearerJwt(ctx.req, verifyOptions)
+      const result = await this.verifyBearerJwt(ctx.req, verifyOptions);
 
-      const tokenId = result.jti
+      const tokenId = result.jti;
       if (!tokenId) {
         throw new AuthRequiredError(
           'Unexpected missing refresh token id',
           'MissingTokenId',
-        )
+        );
       }
 
       return {
@@ -234,8 +235,8 @@ export class AuthVerifier {
           scope: result.scope,
           tokenId,
         },
-      }
-    }
+      };
+    };
   }
 
   public authorization<P extends Params>({
@@ -249,33 +250,33 @@ export class AuthVerifier {
     const access = this.access({
       ...options,
       scopes: [...scopes, ...additional],
-    })
-    const oauth = this.oauth(options)
+    });
+    const oauth = this.oauth(options);
 
     return async (ctx) => {
-      const type = extractAuthType(ctx.req)
+      const type = extractAuthType(ctx.req);
 
       if (type === 'Bearer') {
-        return access(ctx)
+        return access(ctx);
       }
 
       if (type === 'DPoP') {
-        return oauth(ctx)
+        return oauth(ctx);
       }
 
       // Auth headers are set through the access and oauth methods so we only
       // need to set them here if we reach this point
-      setAuthHeaders(ctx.res)
+      setAuthHeaders(ctx.res);
 
       if (type !== null) {
         throw new InvalidRequestError(
           'Unexpected authorization type',
           'InvalidToken',
-        )
+        );
       }
 
-      throw new AuthRequiredError(undefined, 'AuthMissing')
-    }
+      throw new AuthRequiredError(undefined, 'AuthMissing');
+    };
   }
 
   public authorizationOrAdminTokenOptional<P extends Params>(
@@ -284,42 +285,42 @@ export class AuthVerifier {
     OAuthOutput | AccessOutput | AdminTokenOutput | UnauthenticatedOutput,
     P
   > {
-    const authorization = this.authorization(opts)
+    const authorization = this.authorization(opts);
     return async (ctx) => {
-      const type = extractAuthType(ctx.req)
+      const type = extractAuthType(ctx.req);
       if (type === 'Bearer' || type === 'DPoP') {
-        return authorization(ctx)
+        return authorization(ctx);
       } else if (type === 'Basic') {
-        return this.adminToken(ctx)
+        return this.adminToken(ctx);
       } else {
-        return this.unauthenticated(ctx)
+        return this.unauthenticated(ctx);
       }
-    }
+    };
   }
 
   public userServiceAuth: MethodAuthVerifier<UserServiceAuthOutput> = async (
     ctx,
   ) => {
-    setAuthHeaders(ctx.res)
-    const payload = await this.verifyServiceJwt(ctx.req)
+    setAuthHeaders(ctx.res);
+    const payload = await this.verifyServiceJwt(ctx.req);
     return {
       credentials: {
         type: 'user_service_auth',
         did: payload.iss,
       },
-    }
-  }
+    };
+  };
 
   public userServiceAuthOptional: MethodAuthVerifier<
     UserServiceAuthOutput | UnauthenticatedOutput
   > = async (ctx) => {
-    const type = extractAuthType(ctx.req)
+    const type = extractAuthType(ctx.req);
     if (type === 'Bearer') {
-      return await this.userServiceAuth(ctx)
+      return await this.userServiceAuth(ctx);
     } else {
-      return this.unauthenticated(ctx)
+      return this.unauthenticated(ctx);
     }
-  }
+  };
 
   public authorizationOrUserServiceAuth<P extends Params>(
     options: VerifiedOptions &
@@ -327,14 +328,14 @@ export class AuthVerifier {
       ExtraScopedOptions &
       AuthorizedOptions<P>,
   ): MethodAuthVerifier<UserServiceAuthOutput | OAuthOutput | AccessOutput, P> {
-    const authorizationVerifier = this.authorization(options)
+    const authorizationVerifier = this.authorization(options);
     return async (ctx) => {
       if (isDefinitelyServiceAuth(ctx.req)) {
-        return this.userServiceAuth(ctx)
+        return this.userServiceAuth(ctx);
       } else {
-        return authorizationVerifier(ctx)
+        return authorizationVerifier(ctx);
       }
-    }
+    };
   }
 
   protected oauth<P extends Params>({
@@ -347,22 +348,22 @@ export class AuthVerifier {
     const verifyTokenOptions: VerifyTokenPayloadOptions = {
       audience: [this.dids.pds],
       scope: ['atproto'],
-    }
+    };
 
     return async (ctx) => {
-      setAuthHeaders(ctx.res)
+      setAuthHeaders(ctx.res);
 
-      const { req, res } = ctx
+      const { req, res } = ctx;
 
       // https://datatracker.ietf.org/doc/html/rfc9449#section-8.2
-      const dpopNonce = this.oauthVerifier.nextDpopNonce()
+      const dpopNonce = this.oauthVerifier.nextDpopNonce();
       if (dpopNonce) {
-        res.setHeader('DPoP-Nonce', dpopNonce)
-        res.appendHeader('Access-Control-Expose-Headers', 'DPoP-Nonce')
+        res.setHeader('DPoP-Nonce', dpopNonce);
+        res.appendHeader('Access-Control-Expose-Headers', 'DPoP-Nonce');
       }
 
-      const originalUrl = req.originalUrl || req.url || '/'
-      const url = new URL(originalUrl, this._publicUrl)
+      const originalUrl = req.originalUrl || req.url || '/';
+      const url = new URL(originalUrl, this._publicUrl);
 
       const { scope, sub: did } = await this.oauthVerifier
         .authenticateRequest(
@@ -375,37 +376,37 @@ export class AuthVerifier {
           // Make sure to include any WWW-Authenticate header in the response
           // (particularly useful for DPoP's "use_dpop_nonce" error)
           if (err instanceof WWWAuthenticateError) {
-            res.setHeader('WWW-Authenticate', err.wwwAuthenticateHeader)
+            res.setHeader('WWW-Authenticate', err.wwwAuthenticateHeader);
             res.appendHeader(
               'Access-Control-Expose-Headers',
               'WWW-Authenticate',
-            )
+            );
           }
 
           if (err instanceof OAuthError) {
-            throw new XRPCError(err.status, err.error_description, err.error)
+            throw new XRPCError(err.status, err.error_description, err.error);
           }
 
-          throw err
-        })
+          throw err;
+        });
 
       if (!isDidString(did)) {
-        throw new InvalidRequestError('Malformed token', 'InvalidToken')
+        throw new InvalidRequestError('Malformed token', 'InvalidToken');
       }
 
-      await this.verifyStatus(did, verifyStatusOptions)
+      await this.verifyStatus(did, verifyStatusOptions);
 
-      const permissions = new ScopePermissionsTransition(scope?.split(' '))
+      const permissions = new ScopePermissionsTransition(scope?.split(' '));
 
       // Should never happen
       if (!permissions.scopes.has('atproto')) {
         throw new InvalidRequestError(
           'OAuth token does not have "atproto" scope',
           'InvalidToken',
-        )
+        );
       }
 
-      await authorize(permissions, ctx)
+      await authorize(permissions, ctx);
 
       return {
         credentials: {
@@ -413,8 +414,8 @@ export class AuthVerifier {
           did,
           permissions,
         },
-      }
-    }
+      };
+    };
   }
 
   protected async verifyStatus(
@@ -422,7 +423,7 @@ export class AuthVerifier {
     options: VerifiedOptions,
   ): Promise<void> {
     if (options.checkDeactivated || options.checkTakedown) {
-      await this.findAccount(did, options)
+      await this.findAccount(did, options);
     }
   }
 
@@ -438,24 +439,24 @@ export class AuthVerifier {
     const account = await this.accountManager.getAccount(handleOrDid, {
       includeDeactivated: true,
       includeTakenDown: true,
-    })
+    });
     if (!account) {
       // will be turned into ExpiredToken for the client if proxied by entryway
-      throw new ForbiddenError('Account not found', 'AccountNotFound')
+      throw new ForbiddenError('Account not found', 'AccountNotFound');
     }
     if (options.checkTakedown && softDeleted(account)) {
       throw new AuthRequiredError(
         'Account has been taken down',
         'AccountTakedown',
-      )
+      );
     }
     if (options.checkDeactivated && account.deactivatedAt) {
       throw new AuthRequiredError(
         'Account is deactivated',
         'AccountDeactivated',
-      )
+      );
     }
-    return account
+    return account;
   }
 
   /**
@@ -466,9 +467,9 @@ export class AuthVerifier {
     req: IncomingMessage,
     { scopes, ...options }: VerifyBearerJwtOptions<S>,
   ): Promise<VerifyBearerJwtResult<S>> {
-    const token = bearerTokenFromReq(req)
+    const token = bearerTokenFromReq(req);
     if (!token) {
-      throw new AuthRequiredError(undefined, 'AuthMissing')
+      throw new AuthRequiredError(undefined, 'AuthMissing');
     }
 
     const { payload } = await jose
@@ -477,17 +478,17 @@ export class AuthVerifier {
         if (cause instanceof jose.errors.JWTExpired) {
           throw new InvalidRequestError('Token has expired', 'ExpiredToken', {
             cause,
-          })
+          });
         } else {
           throw new InvalidRequestError(
             'Token could not be verified',
             'InvalidToken',
             { cause },
-          )
+          );
         }
-      })
+      });
 
-    const { sub, aud, scope, lxm, cnf, jti } = payload
+    const { sub, aud, scope, lxm, cnf, jti } = payload;
 
     if (typeof lxm !== 'undefined') {
       // Service auth tokens should never make it to here. But since service
@@ -495,65 +496,65 @@ export class AuthVerifier {
       // catch them. This check here is mainly to protect against the
       // hypothetical case in which a PDS would issue service auth tokens using
       // its private key.
-      throw new InvalidRequestError('Malformed token', 'InvalidToken')
+      throw new InvalidRequestError('Malformed token', 'InvalidToken');
     }
     if (typeof cnf !== 'undefined') {
       // Proof-of-Possession (PoP) tokens are not allowed here
       // https://www.rfc-editor.org/rfc/rfc7800.html
-      throw new InvalidRequestError('Malformed token', 'InvalidToken')
+      throw new InvalidRequestError('Malformed token', 'InvalidToken');
     }
     if (typeof sub !== 'string' || !isDidString(sub)) {
-      throw new InvalidRequestError('Malformed token', 'InvalidToken')
+      throw new InvalidRequestError('Malformed token', 'InvalidToken');
     }
     if (typeof aud !== 'string' || !aud.startsWith('did:')) {
-      throw new InvalidRequestError('Malformed token', 'InvalidToken')
+      throw new InvalidRequestError('Malformed token', 'InvalidToken');
     }
     if (typeof jti !== 'string' && typeof jti !== 'undefined') {
-      throw new InvalidRequestError('Malformed token', 'InvalidToken')
+      throw new InvalidRequestError('Malformed token', 'InvalidToken');
     }
     if (!isAuthScope(scope) || !scopes.includes(scope as any)) {
-      throw new InvalidRequestError('Bad token scope', 'InvalidToken')
+      throw new InvalidRequestError('Bad token scope', 'InvalidToken');
     }
 
-    return { sub, aud, jti, scope: scope as S }
+    return { sub, aud, jti, scope: scope as S };
   }
 
   protected async verifyServiceJwt(
     req: IncomingMessage,
     opts?: { iss?: string[] },
   ) {
-    const jwtStr = bearerTokenFromReq(req)
+    const jwtStr = bearerTokenFromReq(req);
     if (!jwtStr) {
-      throw new AuthRequiredError('missing jwt', 'MissingJwt')
+      throw new AuthRequiredError('missing jwt', 'MissingJwt');
     }
 
-    const nsid = parseReqNsid(req)
+    const nsid = parseReqNsid(req);
     const payload = await verifyServiceJwt(
       jwtStr,
       null,
       nsid,
       async (iss, forceRefresh) => {
         if (opts?.iss && !opts.iss.includes(iss)) {
-          throw new AuthRequiredError('Untrusted issuer', 'UntrustedIss')
+          throw new AuthRequiredError('Untrusted issuer', 'UntrustedIss');
         }
-        const [did, serviceId] = iss.split('#') as [string, ...string[]]
+        const [did, serviceId] = iss.split('#') as [string, ...string[]];
         const keyId =
-          serviceId === 'atproto_labeler' ? 'atproto_label' : 'atproto'
-        const didDoc = await this.idResolver.did.resolve(did, forceRefresh)
+          serviceId === 'atproto_labeler' ? 'atproto_label' : 'atproto';
+        const didDoc = await this.idResolver.did.resolve(did, forceRefresh);
         if (!didDoc) {
-          throw new AuthRequiredError('could not resolve iss did')
+          throw new AuthRequiredError('could not resolve iss did');
         }
-        const parsedKey = getVerificationMaterial(didDoc, keyId)
+        const parsedKey = getVerificationMaterial(didDoc, keyId);
         if (!parsedKey) {
-          throw new AuthRequiredError('missing or bad key in did doc')
+          throw new AuthRequiredError('missing or bad key in did doc');
         }
-        const didKey = getDidKeyFromMultibase(parsedKey)
+        const didKey = getDidKeyFromMultibase(parsedKey);
         if (!didKey) {
-          throw new AuthRequiredError('missing or bad key in did doc')
+          throw new AuthRequiredError('missing or bad key in did doc');
         }
-        return didKey
+        return didKey;
       },
-    )
+    );
     if (
       payload.aud !== this.dids.pds &&
       (!this.dids.entryway || payload.aud !== this.dids.entryway)
@@ -561,9 +562,9 @@ export class AuthVerifier {
       throw new AuthRequiredError(
         'jwt audience does not match service did',
         'BadJwtAudience',
-      )
+      );
     }
-    return payload
+    return payload;
   }
 }
 
@@ -575,42 +576,44 @@ export function isUserOrAdmin(
   did: string,
 ): boolean {
   if (!auth.credentials) {
-    return false
+    return false;
   } else if (auth.credentials.type === 'admin_token') {
-    return true
+    return true;
   } else {
-    return auth.credentials.did === did
+    return auth.credentials.did === did;
   }
 }
 
-const knownAuthTypes = ['Basic', 'Bearer', 'DPoP'] as const
-type AuthType = (typeof knownAuthTypes)[number]
+const knownAuthTypes = ['Basic', 'Bearer', 'DPoP'] as const;
+type AuthType = (typeof knownAuthTypes)[number];
 
 const parseAuthorizationHeader = (
   req: IncomingMessage,
 ): [type: null] | [type: AuthType, token: string] => {
-  const authorization = req.headers['authorization']
-  if (!authorization) return [null]
+  const authorization = req.headers['authorization'];
+  if (!authorization) return [null];
 
-  const result = authorization.split(' ')
+  const result = authorization.split(' ');
   if (result.length !== 2) {
     throw new InvalidRequestError(
       'Malformed authorization header',
       'InvalidToken',
-    )
+    );
   }
 
   // authorization type is case-insensitive
-  const authType = result[0]!.toUpperCase()
+  const authType = result[0]!.toUpperCase();
 
-  const type = Object.hasOwn(knownAuthTypes, authType) ? authType as AuthType : null
-  if (type) return [type, result[1]!]
+  const type = Object.hasOwn(knownAuthTypes, authType)
+    ? (authType as AuthType)
+    : null;
+  if (type) return [type, result[1]!];
 
   throw new InvalidRequestError(
     `Unsupported authorization type: ${result[0]}`,
     'InvalidToken',
-  )
-}
+  );
+};
 
 /**
  * @note Not all service auth tokens are guaranteed to have "lxm" claim, so this
@@ -618,51 +621,51 @@ const parseAuthorizationHeader = (
  * check if a token is definitely a service auth token.
  */
 const isDefinitelyServiceAuth = (req: IncomingMessage): boolean => {
-  const token = bearerTokenFromReq(req)
-  if (!token) return false
-  const payload = jose.decodeJwt(token)
-  return payload['lxm'] != null
-}
+  const token = bearerTokenFromReq(req);
+  if (!token) return false;
+  const payload = jose.decodeJwt(token);
+  return payload['lxm'] != null;
+};
 
 const extractAuthType = (req: IncomingMessage): AuthType | null => {
-  const [type] = parseAuthorizationHeader(req)
-  return type
-}
+  const [type] = parseAuthorizationHeader(req);
+  return type;
+};
 
 export const bearerTokenFromReq = (req: IncomingMessage) => {
-  const [type, token] = parseAuthorizationHeader(req)
-  return type === 'Bearer' ? token : null
-}
+  const [type, token] = parseAuthorizationHeader(req);
+  return type === 'Bearer' ? token : null;
+};
 
 const parseBasicAuth = (
   req: IncomingMessage,
 ): { username: string; password: string } | null => {
   try {
-    const [type, b64] = parseAuthorizationHeader(req)
-    if (type !== 'Basic') return null
-    const decoded = Buffer.from(b64, 'base64').toString('utf8')
+    const [type, b64] = parseAuthorizationHeader(req);
+    if (type !== 'Basic') return null;
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
     // We must not use split(':') because the password can contain colons
-    const colon = decoded.indexOf(':')
-    if (colon === -1) return null
-    const username = decoded.slice(0, colon)
-    const password = decoded.slice(colon + 1)
-    return { username, password }
+    const colon = decoded.indexOf(':');
+    if (colon === -1) return null;
+    const username = decoded.slice(0, colon);
+    const password = decoded.slice(colon + 1);
+    return { username, password };
   } catch (err) {
-    return null
+    return null;
   }
-}
+};
 
 export const createSecretKeyObject = (secret: string): KeyObject => {
-  return createSecretKey(Buffer.from(secret))
-}
+  return createSecretKey(Buffer.from(secret));
+};
 
-const keyEncoder = new KeyEncoder('secp256k1')
+const keyEncoder = new KeyEncoder('secp256k1');
 export const createPublicKeyObject = (publicKeyHex: string): KeyObject => {
-  const key = keyEncoder.encodePublic(publicKeyHex, 'raw', 'pem')
-  return createPublicKey({ format: 'pem', key })
-}
+  const key = keyEncoder.encodePublic(publicKeyHex, 'raw', 'pem');
+  return createPublicKey({ format: 'pem', key });
+};
 
 function setAuthHeaders(res: ServerResponse) {
-  res.setHeader('Cache-Control', 'private')
-  appendVary(res, 'Authorization')
+  res.setHeader('Cache-Control', 'private');
+  appendVary(res, 'Authorization');
 }

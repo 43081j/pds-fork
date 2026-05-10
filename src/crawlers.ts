@@ -1,12 +1,12 @@
-import { xrpc } from '@atproto/lex'
-import { BackgroundQueue } from './background.js'
-import { com } from './lexicons.js'
-import { crawlerLogger as log } from './logger.js'
+import { xrpc } from '@atproto/lex';
+import { BackgroundQueue } from './background.js';
+import { com } from './lexicons.js';
+import { crawlerLogger as log } from './logger.js';
 
-const NOTIFY_THRESHOLD = 20 * 60e3
+const NOTIFY_THRESHOLD = 20 * 60e3;
 
 export class Crawlers {
-  private lastNotified = -Infinity
+  private lastNotified = -Infinity;
   private readonly backgroundQueue: BackgroundQueue;
   private readonly hostname: string;
   private readonly crawlers: Iterable<string>;
@@ -16,16 +16,16 @@ export class Crawlers {
     hostname: string,
     crawlers: Iterable<string>,
   ) {
-    this.backgroundQueue = backgroundQueue
-    this.hostname = hostname
-    this.crawlers = crawlers
+    this.backgroundQueue = backgroundQueue;
+    this.hostname = hostname;
+    this.crawlers = crawlers;
   }
 
   notifyOfUpdate() {
-    const now = Date.now()
+    const now = Date.now();
     if (this.lastNotified < now - NOTIFY_THRESHOLD) {
-      this.lastNotified = now
-      this.requestCrawl()
+      this.lastNotified = now;
+      this.requestCrawl();
     } else {
       // @TODO We should probably actually schedule (setTimeout) a crawl for
       // when the threshold is met, instead of just waiting for the next update
@@ -43,11 +43,11 @@ export class Crawlers {
             validateResponse: false,
             strictResponseProcessing: false,
             body: { hostname: this.hostname },
-          })
+          });
         } catch (err) {
-          log.warn({ err, crawler }, 'failed to request crawl')
+          log.warn({ err, crawler }, 'failed to request crawl');
         }
-      })
+      });
     }
   }
 }

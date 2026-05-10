@@ -1,12 +1,12 @@
-import PQueue from 'p-queue'
-import { CacheResult, DidCache, DidDocument } from '@atproto/identity'
-import { excluded } from '../db/util.js'
-import { didCacheLogger } from '../logger.js'
-import { DidCacheDb, getDb, getMigrator } from './db/index.js'
+import PQueue from 'p-queue';
+import { CacheResult, DidCache, DidDocument } from '@atproto/identity';
+import { excluded } from '../db/util.js';
+import { didCacheLogger } from '../logger.js';
+import { DidCacheDb, getDb, getMigrator } from './db/index.js';
 
 export class DidSqliteCache implements DidCache {
-  db: DidCacheDb
-  public pQueue: PQueue | null //null during teardown
+  db: DidCacheDb;
+  public pQueue: PQueue | null; //null during teardown
   public staleTTL: number;
   public maxTTL: number;
 
@@ -16,10 +16,10 @@ export class DidSqliteCache implements DidCache {
     maxTTL: number,
     disableWalAutoCheckpoint = false,
   ) {
-    this.staleTTL = staleTTL
-    this.maxTTL = maxTTL
-    this.db = getDb(dbLocation, disableWalAutoCheckpoint)
-    this.pQueue = new PQueue()
+    this.staleTTL = staleTTL;
+    this.maxTTL = maxTTL;
+    this.db = getDb(dbLocation, disableWalAutoCheckpoint);
+    this.pQueue = new PQueue();
   }
 
   async cacheDid(
@@ -35,7 +35,7 @@ export class DidSqliteCache implements DidCache {
             .set({ doc: JSON.stringify(doc), updatedAt: Date.now() })
             .where('did', '=', did)
             .where('updatedAt', '=', prevResult.updatedAt),
-        )
+        );
       } else {
         await this.db.executeWithRetry(
           this.db.db
@@ -47,10 +47,10 @@ export class DidSqliteCache implements DidCache {
                 updatedAt: excluded(this.db.db, 'updatedAt'),
               }),
             ),
-        )
+        );
       }
     } catch (err) {
-      didCacheLogger.error({ did, doc, err }, 'failed to cache did')
+      didCacheLogger.error({ did, doc, err }, 'failed to cache did');
     }
   }
 
@@ -61,24 +61,24 @@ export class DidSqliteCache implements DidCache {
   ): Promise<void> {
     this.pQueue?.add(async () => {
       try {
-        const doc = await getDoc()
+        const doc = await getDoc();
         if (doc) {
-          await this.cacheDid(did, doc, prevResult)
+          await this.cacheDid(did, doc, prevResult);
         } else {
-          await this.clearEntry(did)
+          await this.clearEntry(did);
         }
       } catch (err) {
-        didCacheLogger.error({ did, err }, 'refreshing did cache failed')
+        didCacheLogger.error({ did, err }, 'refreshing did cache failed');
       }
-    })
+    });
   }
 
   async checkCache(did: string): Promise<CacheResult | null> {
     try {
-      return await this.checkCacheInternal(did)
+      return await this.checkCacheInternal(did);
     } catch (err) {
-      didCacheLogger.error({ did, err }, 'failed to check did cache')
-      return null
+      didCacheLogger.error({ did, err }, 'failed to check did cache');
+      return null;
     }
   }
 
@@ -87,49 +87,49 @@ export class DidSqliteCache implements DidCache {
       .selectFrom('did_doc')
       .where('did', '=', did)
       .selectAll()
-      .executeTakeFirst()
-    if (!res) return null
-    const now = Date.now()
-    const updatedAt = new Date(res.updatedAt).getTime()
-    const expired = now > updatedAt + this.maxTTL
-    const stale = now > updatedAt + this.staleTTL
+      .executeTakeFirst();
+    if (!res) return null;
+    const now = Date.now();
+    const updatedAt = new Date(res.updatedAt).getTime();
+    const expired = now > updatedAt + this.maxTTL;
+    const stale = now > updatedAt + this.staleTTL;
     return {
       doc: JSON.parse(res.doc) as DidDocument,
       updatedAt,
       did,
       stale,
       expired,
-    }
+    };
   }
 
   async clearEntry(did: string): Promise<void> {
     try {
       await this.db.executeWithRetry(
         this.db.db.deleteFrom('did_doc').where('did', '=', did),
-      )
+      );
     } catch (err) {
-      didCacheLogger.error({ did, err }, 'clearing did cache entry failed')
+      didCacheLogger.error({ did, err }, 'clearing did cache entry failed');
     }
   }
 
   async clear(): Promise<void> {
-    await this.db.db.deleteFrom('did_doc').execute()
+    await this.db.db.deleteFrom('did_doc').execute();
   }
 
   async processAll() {
-    await this.pQueue?.onIdle()
+    await this.pQueue?.onIdle();
   }
 
   async migrateOrThrow() {
-    await this.db.ensureWal()
-    await getMigrator(this.db).migrateToLatestOrThrow()
+    await this.db.ensureWal();
+    await getMigrator(this.db).migrateToLatestOrThrow();
   }
 
   async destroy() {
-    const pQueue = this.pQueue
-    this.pQueue = null
-    pQueue?.pause()
-    pQueue?.clear()
-    await pQueue?.onIdle()
+    const pQueue = this.pQueue;
+    this.pQueue = null;
+    pQueue?.pause();
+    pQueue?.clear();
+    await pQueue?.onIdle();
   }
 }

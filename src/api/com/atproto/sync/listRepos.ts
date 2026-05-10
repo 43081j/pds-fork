@@ -1,14 +1,14 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { formatAccountStatus } from '../../../../account-manager/account-manager.js'
-import { AppContext } from '../../../../context.js'
-import { Cursor, GenericKeyset, paginate } from '../../../../db/pagination.js'
-import { com } from '../../../../lexicons.js'
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { formatAccountStatus } from '../../../../account-manager/account-manager.js';
+import { AppContext } from '../../../../context.js';
+import { Cursor, GenericKeyset, paginate } from '../../../../db/pagination.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.sync.listRepos, async ({ params }) => {
-    const { limit, cursor } = params
-    const db = ctx.accountManager.db
-    const { ref } = db.db.dynamic
+    const { limit, cursor } = params;
+    const db = ctx.accountManager.db;
+    const { ref } = db.db.dynamic;
     let builder = db.db
       .selectFrom('actor')
       .innerJoin('repo_root', 'repo_root.did', 'actor.did')
@@ -19,56 +19,56 @@ export default function (server: Server, ctx: AppContext) {
         'actor.createdAt as createdAt',
         'actor.deactivatedAt as deactivatedAt',
         'actor.takedownRef as takedownRef',
-      ])
-    const keyset = new TimeDidKeyset(ref('actor.createdAt'), ref('actor.did'))
+      ]);
+    const keyset = new TimeDidKeyset(ref('actor.createdAt'), ref('actor.did'));
     builder = paginate(builder, {
       limit,
       cursor,
       keyset,
       direction: 'asc',
       tryIndex: true,
-    })
-    const res = await builder.execute()
+    });
+    const res = await builder.execute();
     const repos = res.map((row): com.atproto.sync.listRepos.Repo => {
-      const { active, status } = formatAccountStatus(row)
+      const { active, status } = formatAccountStatus(row);
       return {
         did: row.did,
         head: row.head,
         rev: row.rev ?? '',
         active,
         status,
-      }
-    })
+      };
+    });
     return {
       encoding: 'application/json' as const,
       body: {
         cursor: keyset.packFromResult(res),
         repos,
       },
-    }
-  })
+    };
+  });
 }
 
-type TimeDidResult = { createdAt: string; did: string }
+type TimeDidResult = { createdAt: string; did: string };
 
 export class TimeDidKeyset extends GenericKeyset<TimeDidResult, Cursor> {
   labelResult(result: TimeDidResult): Cursor {
-    return { primary: result.createdAt, secondary: result.did }
+    return { primary: result.createdAt, secondary: result.did };
   }
   labeledResultToCursor(labeled: Cursor) {
     return {
       primary: new Date(labeled.primary).getTime().toString(),
       secondary: labeled.secondary,
-    }
+    };
   }
   cursorToLabeledResult(cursor: Cursor) {
-    const primaryDate = new Date(parseInt(cursor.primary, 10))
+    const primaryDate = new Date(parseInt(cursor.primary, 10));
     if (isNaN(primaryDate.getTime())) {
-      throw new InvalidRequestError('Malformed cursor')
+      throw new InvalidRequestError('Malformed cursor');
     }
     return {
       primary: primaryDate.toISOString(),
       secondary: cursor.secondary,
-    }
+    };
   }
 }

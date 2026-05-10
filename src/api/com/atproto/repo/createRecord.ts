@@ -1,20 +1,20 @@
-import { parseCid } from '@atproto/lex-data'
-import { InvalidRecordKeyError } from '@atproto/syntax'
+import { parseCid } from '@atproto/lex-data';
+import { InvalidRecordKeyError } from '@atproto/syntax';
 import {
   AuthRequiredError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { dbLogger } from '../../../../logger.js'
+} from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
   InvalidRecordError,
   PreparedCreate,
   prepareCreate,
   prepareDelete,
-} from '../../../../repo/index.js'
+} from '../../../../repo/index.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.repo.createRecord, {
@@ -46,28 +46,28 @@ export default function (server: Server, ctx: AppContext) {
     ],
     handler: async ({ input, auth }) => {
       const { repo, collection, rkey, record, swapCommit, validate } =
-        input.body
+        input.body;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
         checkTakedown: true,
-      })
+      });
 
-      const did = account.did
+      const did = account.did;
       if (did !== auth.credentials.did) {
-        throw new AuthRequiredError()
+        throw new AuthRequiredError();
       }
 
       if (auth.credentials.type === 'oauth') {
         auth.credentials.permissions.assertRepo({
           action: 'create',
           collection,
-        })
+        });
       }
 
-      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined
+      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined;
 
-      let write: PreparedCreate
+      let write: PreparedCreate;
       try {
         write = await prepareCreate({
           did,
@@ -75,15 +75,15 @@ export default function (server: Server, ctx: AppContext) {
           record,
           rkey,
           validate,
-        })
+        });
       } catch (err) {
         if (err instanceof InvalidRecordError) {
-          throw new InvalidRequestError(err.message)
+          throw new InvalidRequestError(err.message);
         }
         if (err instanceof InvalidRecordKeyError) {
-          throw new InvalidRequestError(err.message)
+          throw new InvalidRequestError(err.message);
         }
-        throw err
+        throw err;
       }
 
       const commit = await ctx.actorStore.transact(did, async (actorTxn) => {
@@ -93,26 +93,26 @@ export default function (server: Server, ctx: AppContext) {
                 write.uri,
                 write.record,
               )
-            : []
+            : [];
         const backlinkDeletions = backlinkConflicts.map((uri) =>
           prepareDelete({
             did: uri.did,
             collection: uri.collectionSafe,
             rkey: uri.rkeySafe,
           }),
-        )
-        const writes = [...backlinkDeletions, write]
+        );
+        const writes = [...backlinkDeletions, write];
         const commit = await actorTxn.repo
           .processWrites(writes, swapCommitCid)
           .catch((err) => {
             if (err instanceof BadCommitSwapError) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap')
+              throw new InvalidRequestError(err.message, 'InvalidSwap');
             }
-            throw err
-          })
-        await ctx.sequencer.sequenceCommit(did, commit)
-        return commit
-      })
+            throw err;
+          });
+        await ctx.sequencer.sequenceCommit(did, commit);
+        return commit;
+      });
 
       await ctx.accountManager
         .updateRepoRoot(did, commit.cid, commit.rev)
@@ -120,8 +120,8 @@ export default function (server: Server, ctx: AppContext) {
           dbLogger.error(
             { err, did, cid: commit.cid, rev: commit.rev },
             'failed to update account root',
-          )
-        })
+          );
+        });
 
       return {
         encoding: 'application/json' as const,
@@ -134,7 +134,7 @@ export default function (server: Server, ctx: AppContext) {
           },
           validationStatus: write.validationStatus,
         },
-      }
+      };
     },
-  })
+  });
 }

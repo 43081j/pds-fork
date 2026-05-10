@@ -1,69 +1,69 @@
-import { Cid, LexMap, TypedBlobRef } from '@atproto/lex-data'
-import { BlockMap, CommitData, WriteOpAction } from '@atproto/repo'
-import { AtUri } from '@atproto/syntax'
+import { Cid, LexMap, TypedBlobRef } from '@atproto/lex-data';
+import { BlockMap, CommitData, WriteOpAction } from '@atproto/repo';
+import { AtUri } from '@atproto/syntax';
 
-export type ValidationStatus = 'valid' | 'unknown'
+export type ValidationStatus = 'valid' | 'unknown';
 
 export type PreparedCreate = {
-  action: WriteOpAction.Create
-  uri: AtUri
-  cid: Cid
-  swapCid?: Cid | null
-  record: LexMap
-  blobs: TypedBlobRef[]
-  validationStatus?: ValidationStatus
-}
+  action: WriteOpAction.Create;
+  uri: AtUri;
+  cid: Cid;
+  swapCid?: Cid | null;
+  record: LexMap;
+  blobs: TypedBlobRef[];
+  validationStatus?: ValidationStatus;
+};
 
 export type PreparedUpdate = {
-  action: WriteOpAction.Update
-  uri: AtUri
-  cid: Cid
-  swapCid?: Cid | null
-  record: LexMap
-  blobs: TypedBlobRef[]
-  validationStatus?: ValidationStatus
-}
+  action: WriteOpAction.Update;
+  uri: AtUri;
+  cid: Cid;
+  swapCid?: Cid | null;
+  record: LexMap;
+  blobs: TypedBlobRef[];
+  validationStatus?: ValidationStatus;
+};
 
 export type PreparedDelete = {
-  action: WriteOpAction.Delete
-  uri: AtUri
-  swapCid?: Cid | null
-}
+  action: WriteOpAction.Delete;
+  uri: AtUri;
+  swapCid?: Cid | null;
+};
 
 export type CommitOp = {
-  action: 'create' | 'update' | 'delete'
-  path: string
-  cid: Cid | null
-  prev?: Cid
-}
+  action: 'create' | 'update' | 'delete';
+  path: string;
+  cid: Cid | null;
+  prev?: Cid;
+};
 
 export type CommitDataWithOps = CommitData & {
-  ops: CommitOp[]
-  prevData: Cid | null
-}
+  ops: CommitOp[];
+  prevData: Cid | null;
+};
 
-export type PreparedWrite = PreparedCreate | PreparedUpdate | PreparedDelete
+export type PreparedWrite = PreparedCreate | PreparedUpdate | PreparedDelete;
 
 export type SyncEvtData = {
-  cid: Cid
-  rev: string
-  blocks: BlockMap
-}
+  cid: Cid;
+  rev: string;
+  blocks: BlockMap;
+};
 
 export class InvalidRecordError extends Error {}
 
 export class BadCommitSwapError extends Error {
-  public cid: Cid
+  public cid: Cid;
   constructor(cid: Cid) {
-    super(`Commit was at ${cid.toString()}`)
-    this.cid = cid
+    super(`Commit was at ${cid.toString()}`);
+    this.cid = cid;
   }
 }
 
 export class BadRecordSwapError extends Error {
-  public cid: Cid | null
+  public cid: Cid | null;
   constructor(cid: Cid | null) {
-    super(`Record was at ${cid?.toString() ?? 'null'}`)
-    this.cid = cid
+    super(`Record was at ${cid?.toString() ?? 'null'}`);
+    this.cid = cid;
   }
 }

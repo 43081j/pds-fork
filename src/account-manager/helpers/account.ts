@@ -1,4 +1,4 @@
-import { DAY } from '@atproto/common'
+import { DAY } from '@atproto/common';
 import {
   AtIdentifierString,
   DatetimeString,
@@ -6,34 +6,34 @@ import {
   HandleString,
   currentDatetimeString,
   isDidIdentifier,
-} from '@atproto/lex'
-import { isErrUniqueViolation, notSoftDeletedClause } from '../../db/index.js'
-import { com } from '../../lexicons.js'
-import { AccountDb, ActorEntry } from '../db/index.js'
+} from '@atproto/lex';
+import { isErrUniqueViolation, notSoftDeletedClause } from '../../db/index.js';
+import { com } from '../../lexicons.js';
+import { AccountDb, ActorEntry } from '../db/index.js';
 
 export class UserAlreadyExistsError extends Error {}
 
 export type ActorAccount = ActorEntry & {
-  email: string | null
-  emailConfirmedAt: string | null
-  invitesDisabled: 0 | 1 | null
-}
+  email: string | null;
+  emailConfirmedAt: string | null;
+  invitesDisabled: 0 | 1 | null;
+};
 
 export type AvailabilityFlags = {
-  includeTakenDown?: boolean
-  includeDeactivated?: boolean
-}
+  includeTakenDown?: boolean;
+  includeDeactivated?: boolean;
+};
 
 export type AccountStatus =
   | 'active'
   | 'takendown'
   | 'suspended'
   | 'deleted'
-  | 'deactivated'
+  | 'deactivated';
 
 export const selectAccountQB = (db: AccountDb, flags?: AvailabilityFlags) => {
-  const { includeTakenDown = false, includeDeactivated = false } = flags ?? {}
-  const { ref } = db.db.dynamic
+  const { includeTakenDown = false, includeDeactivated = false } = flags ?? {};
+  const { ref } = db.db.dynamic;
   return db.db
     .selectFrom('actor')
     .leftJoin('account', 'actor.did', 'account.did')
@@ -51,8 +51,8 @@ export const selectAccountQB = (db: AccountDb, flags?: AvailabilityFlags) => {
       'account.email',
       'account.emailConfirmedAt',
       'account.invitesDisabled',
-    ])
-}
+    ]);
+};
 
 export const getAccount = async (
   db: AccountDb,
@@ -62,36 +62,36 @@ export const getAccount = async (
   const found = await selectAccountQB(db, flags)
     .where((qb) => {
       if (isDidIdentifier(handleOrDid)) {
-        return qb.where('actor.did', '=', handleOrDid)
+        return qb.where('actor.did', '=', handleOrDid);
       } else {
-        return qb.where('actor.handle', '=', handleOrDid)
+        return qb.where('actor.handle', '=', handleOrDid);
       }
     })
-    .executeTakeFirst()
-  return found || null
-}
+    .executeTakeFirst();
+  return found || null;
+};
 
 export const getAccounts = async (
   db: AccountDb,
   dids: DidString[],
   flags?: AvailabilityFlags,
 ): Promise<Map<string, ActorAccount>> => {
-  const results = new Map<string, ActorAccount>()
+  const results = new Map<string, ActorAccount>();
 
   if (!dids.length) {
-    return results
+    return results;
   }
 
   const accounts = await selectAccountQB(db, flags)
     .where('actor.did', 'in', dids)
-    .execute()
+    .execute();
 
   accounts.forEach((account) => {
-    results.set(account.did, account)
-  })
+    results.set(account.did, account);
+  });
 
-  return results
-}
+  return results;
+};
 
 export const getAccountByEmail = async (
   db: AccountDb,
@@ -100,21 +100,21 @@ export const getAccountByEmail = async (
 ): Promise<ActorAccount | null> => {
   const found = await selectAccountQB(db, flags)
     .where('email', '=', email.toLowerCase())
-    .executeTakeFirst()
-  return found || null
-}
+    .executeTakeFirst();
+  return found || null;
+};
 
 export const registerActor = async (
   db: AccountDb,
   opts: {
-    did: DidString
-    handle: HandleString
-    deactivated?: boolean
+    did: DidString;
+    handle: HandleString;
+    deactivated?: boolean;
   },
 ) => {
-  const { did, handle, deactivated } = opts
-  const now = Date.now()
-  const createdAt = new Date(now).toISOString()
+  const { did, handle, deactivated } = opts;
+  const now = Date.now();
+  const createdAt = new Date(now).toISOString();
   const [registered] = await db.executeWithRetry(
     db.db
       .insertInto('actor')
@@ -127,21 +127,21 @@ export const registerActor = async (
       })
       .onConflict((oc) => oc.doNothing())
       .returning('did'),
-  )
+  );
   if (!registered) {
-    throw new UserAlreadyExistsError()
+    throw new UserAlreadyExistsError();
   }
-}
+};
 
 export const registerAccount = async (
   db: AccountDb,
   opts: {
-    did: string
-    email: string
-    passwordScrypt: string
+    did: string;
+    email: string;
+    passwordScrypt: string;
   },
 ) => {
-  const { did, email, passwordScrypt } = opts
+  const { did, email, passwordScrypt } = opts;
   const [registered] = await db.executeWithRetry(
     db.db
       .insertInto('account')
@@ -152,11 +152,11 @@ export const registerAccount = async (
       })
       .onConflict((oc) => oc.doNothing())
       .returning('did'),
-  )
+  );
   if (!registered) {
-    throw new UserAlreadyExistsError()
+    throw new UserAlreadyExistsError();
   }
-}
+};
 
 export const deleteAccount = async (
   db: AccountDb,
@@ -166,20 +166,20 @@ export const deleteAccount = async (
   // Also, this can safely be run multiple times if it fails.
   await db.executeWithRetry(
     db.db.deleteFrom('repo_root').where('did', '=', did),
-  )
+  );
   await db.executeWithRetry(
     db.db.deleteFrom('email_token').where('did', '=', did),
-  )
+  );
   await db.executeWithRetry(
     db.db.deleteFrom('refresh_token').where('did', '=', did),
-  )
+  );
   await db.executeWithRetry(
     db.db.deleteFrom('account').where('account.did', '=', did),
-  )
+  );
   await db.executeWithRetry(
     db.db.deleteFrom('actor').where('actor.did', '=', did),
-  )
-}
+  );
+};
 
 export const updateHandle = async (
   db: AccountDb,
@@ -194,11 +194,11 @@ export const updateHandle = async (
       .whereNotExists(
         db.db.selectFrom('actor').where('handle', '=', handle).selectAll(),
       ),
-  )
+  );
   if (res.numUpdatedRows < 1) {
-    throw new UserAlreadyExistsError()
+    throw new UserAlreadyExistsError();
   }
-}
+};
 
 export const updateEmail = async (
   db: AccountDb,
@@ -214,14 +214,14 @@ export const updateEmail = async (
           emailConfirmedAt: null,
         })
         .where('did', '=', did),
-    )
+    );
   } catch (err) {
     if (isErrUniqueViolation(err)) {
-      throw new UserAlreadyExistsError()
+      throw new UserAlreadyExistsError();
     }
-    throw err
+    throw err;
   }
-}
+};
 
 export const setEmailConfirmedAt = async (
   db: AccountDb,
@@ -233,28 +233,30 @@ export const setEmailConfirmedAt = async (
       .updateTable('account')
       .set({ emailConfirmedAt })
       .where('did', '=', did),
-  )
-}
+  );
+};
 
 export const getAccountAdminStatus = async (
   db: AccountDb,
   did: DidString,
 ): Promise<{
-  takedown: com.atproto.admin.defs.StatusAttr
-  deactivated: com.atproto.admin.defs.StatusAttr
+  takedown: com.atproto.admin.defs.StatusAttr;
+  deactivated: com.atproto.admin.defs.StatusAttr;
 } | null> => {
   const res = await db.db
     .selectFrom('actor')
     .select(['takedownRef', 'deactivatedAt'])
     .where('did', '=', did)
-    .executeTakeFirst()
-  if (!res) return null
+    .executeTakeFirst();
+  if (!res) return null;
   const takedown = res.takedownRef
     ? { applied: true, ref: res.takedownRef }
-    : { applied: false }
-  const deactivated = res.deactivatedAt ? { applied: true } : { applied: false }
-  return { takedown, deactivated }
-}
+    : { applied: false };
+  const deactivated = res.deactivatedAt
+    ? { applied: true }
+    : { applied: false };
+  return { takedown, deactivated };
+};
 
 export const updateAccountTakedownStatus = async (
   db: AccountDb,
@@ -262,12 +264,12 @@ export const updateAccountTakedownStatus = async (
   takedown: com.atproto.admin.defs.StatusAttr,
 ) => {
   const takedownRef = takedown.applied
-    ? takedown.ref ?? currentDatetimeString()
-    : null
+    ? (takedown.ref ?? currentDatetimeString())
+    : null;
   await db.executeWithRetry(
     db.db.updateTable('actor').set({ takedownRef }).where('did', '=', did),
-  )
-}
+  );
+};
 
 export const deactivateAccount = async (
   db: AccountDb,
@@ -282,8 +284,8 @@ export const deactivateAccount = async (
         deleteAfter,
       })
       .where('did', '=', did),
-  )
-}
+  );
+};
 
 export const activateAccount = async (db: AccountDb, did: DidString) => {
   await db.executeWithRetry(
@@ -294,22 +296,22 @@ export const activateAccount = async (db: AccountDb, did: DidString) => {
         deleteAfter: null,
       })
       .where('did', '=', did),
-  )
-}
+  );
+};
 
 export const formatAccountStatus = (
   account: null | {
-    takedownRef: string | null
-    deactivatedAt: string | null
+    takedownRef: string | null;
+    deactivatedAt: string | null;
   },
 ) => {
   if (!account) {
-    return { active: false, status: 'deleted' } as const
+    return { active: false, status: 'deleted' } as const;
   } else if (account.takedownRef) {
-    return { active: false, status: 'takendown' } as const
+    return { active: false, status: 'takendown' } as const;
   } else if (account.deactivatedAt) {
-    return { active: false, status: 'deactivated' } as const
+    return { active: false, status: 'deactivated' } as const;
   } else {
-    return { active: true, status: undefined } as const
+    return { active: true, status: undefined } as const;
   }
-}
+};

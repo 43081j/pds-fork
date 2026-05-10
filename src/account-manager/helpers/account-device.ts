@@ -1,12 +1,12 @@
-import assert from 'node:assert'
-import { DeviceId } from '@atproto/oauth-provider'
-import { DidString } from '@atproto/syntax'
-import { toDateISO } from '../../db/index.js'
-import { AccountDb } from '../db/index.js'
-import { selectAccountQB } from './account.js'
+import assert from 'node:assert';
+import { DeviceId } from '@atproto/oauth-provider';
+import { DidString } from '@atproto/syntax';
+import { toDateISO } from '../../db/index.js';
+import { AccountDb } from '../db/index.js';
+import { selectAccountQB } from './account.js';
 
 export function upsertQB(db: AccountDb, deviceId: DeviceId, did: string) {
-  const now = new Date()
+  const now = new Date();
 
   return db.db
     .insertInto('account_device')
@@ -21,20 +21,20 @@ export function upsertQB(db: AccountDb, deviceId: DeviceId, did: string) {
       oc.columns(['deviceId', 'did']).doUpdateSet({
         updatedAt: toDateISO(now),
       }),
-    )
+    );
 }
 
 export function selectQB(
   db: AccountDb,
   filter: {
-    sub?: string
-    deviceId?: DeviceId
+    sub?: string;
+    deviceId?: DeviceId;
   },
 ) {
   assert(
     filter.sub != null || filter.deviceId != null,
     'Either sub or deviceId must be provided',
-  )
+  );
 
   return (
     selectAccountQB(db, { includeDeactivated: true })
@@ -58,12 +58,12 @@ export function selectQB(
       .if(filter.deviceId != null, (qb) =>
         qb.where('account_device.deviceId', '=', filter.deviceId!),
       )
-  )
+  );
 }
 
 export function removeQB(db: AccountDb, deviceId: DeviceId, did: string) {
   return db.db
     .deleteFrom('account_device')
     .where('deviceId', '=', deviceId)
-    .where('did', '=', did)
+    .where('did', '=', did);
 }

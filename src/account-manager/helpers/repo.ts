@@ -1,5 +1,5 @@
-import { Cid, currentDatetimeString } from '@atproto/lex'
-import { AccountDb } from '../db/index.js'
+import { Cid, currentDatetimeString } from '@atproto/lex';
+import { AccountDb } from '../db/index.js';
 
 export const updateRoot = async (
   db: AccountDb,
@@ -20,5 +20,5 @@ export const updateRoot = async (
       .onConflict((oc) =>
         oc.column('did').doUpdateSet({ cid: cid.toString(), rev }),
       ),
-  )
-}
+  );
+};

@@ -1,13 +1,13 @@
-import { getNotif } from '@atproto/identity'
-import { xrpc } from '@atproto/lex'
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { app } from '../../../../lexicons.js'
-import { getDidDoc } from '../util/resolver.js'
+import { getNotif } from '@atproto/identity';
+import { xrpc } from '@atproto/lex';
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { app } from '../../../../lexicons.js';
+import { getDidDoc } from '../util/resolver.js';
 
 export default function (server: Server, ctx: AppContext) {
-  const { bskyAppView } = ctx
-  if (!bskyAppView) return
+  const { bskyAppView } = ctx;
+  if (!bskyAppView) return;
 
   server.add(app.bsky.notification.registerPush, {
     auth: ctx.authVerifier.authorization({
@@ -20,32 +20,32 @@ export default function (server: Server, ctx: AppContext) {
       },
     }),
     handler: async ({ auth, input: { body } }) => {
-      const { serviceDid } = body
-      const { did } = auth.credentials
+      const { serviceDid } = body;
+      const { did } = auth.credentials;
 
       if (auth.credentials.type === 'oauth') {
         auth.credentials.permissions.assertRpc({
           aud: `${serviceDid}#bsky_notif`,
           lxm: app.bsky.notification.registerPush.$lxm,
-        })
+        });
       }
 
       const { headers } = await ctx.serviceAuthHeaders(
         did,
         serviceDid,
         app.bsky.notification.registerPush.$lxm,
-      )
+      );
 
       if (bskyAppView.did === serviceDid) {
         await bskyAppView.client.call(
           app.bsky.notification.registerPush,
           body,
           { headers },
-        )
-        return
+        );
+        return;
       }
 
-      const notifEndpoint = await getEndpoint(ctx, serviceDid)
+      const notifEndpoint = await getEndpoint(ctx, serviceDid);
 
       await xrpc(notifEndpoint, app.bsky.notification.registerPush, {
         validateRequest: ctx.cfg.service.devMode,
@@ -53,18 +53,18 @@ export default function (server: Server, ctx: AppContext) {
         strictResponseProcessing: ctx.cfg.service.devMode,
         body,
         headers,
-      })
+      });
     },
-  })
+  });
 }
 
 const getEndpoint = async (ctx: AppContext, serviceDid: string) => {
-  const doc = await getDidDoc(ctx, serviceDid)
-  const notifEndpoint = getNotif(doc)
+  const doc = await getDidDoc(ctx, serviceDid);
+  const notifEndpoint = getNotif(doc);
   if (!notifEndpoint) {
     throw new InvalidRequestError(
       `invalid notification service details in did document: ${serviceDid}`,
-    )
+    );
   }
-  return notifEndpoint
-}
+  return notifEndpoint;
+};

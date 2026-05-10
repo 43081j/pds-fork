@@ -1,26 +1,26 @@
-import assert from 'node:assert'
-import { z } from 'zod'
-import { schema } from '@atproto/common'
+import assert from 'node:assert';
+import { z } from 'zod';
+import { schema } from '@atproto/common';
 import {
   DatetimeString,
   DidString,
   HandleString,
   isDidString,
   isHandleString,
-} from '@atproto/lex'
-import { encode as cborEncode } from '@atproto/lex-cbor'
-import { BlockMap, blocksToCarFile } from '@atproto/repo'
-import { AccountStatus } from '../account-manager/account-manager.js'
-import { CommitDataWithOps, SyncEvtData } from '../repo/index.js'
-import { RepoSeqInsert } from './db/index.js'
+} from '@atproto/lex';
+import { encode as cborEncode } from '@atproto/lex-cbor';
+import { BlockMap, blocksToCarFile } from '@atproto/repo';
+import { AccountStatus } from '../account-manager/account-manager.js';
+import { CommitDataWithOps, SyncEvtData } from '../repo/index.js';
+import { RepoSeqInsert } from './db/index.js';
 
 export const formatSeqCommit = async (
   did: string,
   commitData: CommitDataWithOps,
 ): Promise<RepoSeqInsert> => {
-  const blocksToSend = new BlockMap()
-  blocksToSend.addMap(commitData.newBlocks)
-  blocksToSend.addMap(commitData.relevantBlocks)
+  const blocksToSend = new BlockMap();
+  blocksToSend.addMap(commitData.newBlocks);
+  blocksToSend.addMap(commitData.relevantBlocks);
 
   const evt = {
     repo: did,
@@ -34,50 +34,53 @@ export const formatSeqCommit = async (
     rebase: false,
     tooBig: false,
     blobs: [],
-  }
+  };
 
   return {
     did,
     eventType: 'append' as const,
     event: cborEncode(evt),
     sequencedAt: new Date().toISOString(),
-  }
-}
+  };
+};
 
 export const formatSeqSyncEvt = async (
   did: DidString,
   data: SyncEvtData,
 ): Promise<RepoSeqInsert> => {
-  const blocks = await blocksToCarFile(data.cid, data.blocks) as Uint8Array<ArrayBuffer>
+  const blocks = (await blocksToCarFile(
+    data.cid,
+    data.blocks,
+  )) as Uint8Array<ArrayBuffer>;
   const evt: SyncEvt = {
     did,
     rev: data.rev,
     blocks,
-  }
+  };
   return {
     did,
     eventType: 'sync',
     event: cborEncode(evt),
     sequencedAt: new Date().toISOString(),
-  }
-}
+  };
+};
 
 export const syncEvtDataFromCommit = (
   commitData: CommitDataWithOps,
 ): SyncEvtData => {
   const { blocks, missing } = commitData.relevantBlocks.getMany([
     commitData.cid,
-  ])
+  ]);
   assert(
     !missing.length,
     'commit block was not found, could not build sync event',
-  )
+  );
   return {
     rev: commitData.rev,
     cid: commitData.cid,
     blocks,
-  }
-}
+  };
+};
 
 export const formatSeqIdentityEvt = async (
   did: DidString,
@@ -85,17 +88,17 @@ export const formatSeqIdentityEvt = async (
 ): Promise<RepoSeqInsert> => {
   const evt: IdentityEvt = {
     did,
-  }
+  };
   if (handle) {
-    evt.handle = handle
+    evt.handle = handle;
   }
   return {
     did,
     eventType: 'identity',
     event: cborEncode(evt),
     sequencedAt: new Date().toISOString(),
-  }
-}
+  };
+};
 
 export const formatSeqAccountEvt = async (
   did: DidString,
@@ -104,9 +107,9 @@ export const formatSeqAccountEvt = async (
   const evt: AccountEvt = {
     did,
     active: status === 'active',
-  }
+  };
   if (status !== 'active') {
-    evt.status = status
+    evt.status = status;
   }
 
   return {
@@ -114,8 +117,8 @@ export const formatSeqAccountEvt = async (
     eventType: 'account',
     event: cborEncode(evt),
     sequencedAt: new Date().toISOString(),
-  }
-}
+  };
+};
 
 export const commitEvtOp = z.object({
   action: z.union([
@@ -127,8 +130,8 @@ export const commitEvtOp = z.object({
   path: z.string(),
   cid: schema.cid.nullable(),
   prev: schema.cid.optional(),
-})
-export type CommitEvtOp = z.infer<typeof commitEvtOp>
+});
+export type CommitEvtOp = z.infer<typeof commitEvtOp>;
 
 // @TODO This runtime code is only used to generate "types". We should either
 // make use of it or only use types.
@@ -143,62 +146,57 @@ export const commitEvt = z.object({
   ops: z.array(commitEvtOp),
   blobs: z.array(schema.cid),
   prevData: schema.cid.optional(),
-})
-export type CommitEvt = z.infer<typeof commitEvt>
+});
+export type CommitEvt = z.infer<typeof commitEvt>;
 
 export const syncEvt = z.object({
   did: z.string().refine(isDidString),
   blocks: schema.bytes,
   rev: z.string(),
-})
-export type SyncEvt = z.infer<typeof syncEvt>
+});
+export type SyncEvt = z.infer<typeof syncEvt>;
 
 export const identityEvt = z.object({
   did: z.string().refine(isDidString),
   handle: z.string().refine(isHandleString).optional(),
-})
-export type IdentityEvt = z.infer<typeof identityEvt>
+});
+export type IdentityEvt = z.infer<typeof identityEvt>;
 
 export const accountEvt = z.object({
   did: z.string().refine(isDidString),
   active: z.boolean(),
   status: z
-    .enum([
-      'takendown',
-      'suspended',
-      'deleted',
-      'deactivated',
-    ])
+    .enum(['takendown', 'suspended', 'deleted', 'deactivated'])
     .optional(),
-})
-export type AccountEvt = z.infer<typeof accountEvt>
+});
+export type AccountEvt = z.infer<typeof accountEvt>;
 
 type TypedCommitEvt = {
-  type: 'commit'
-  seq: number
-  time: DatetimeString
-  evt: CommitEvt
-}
+  type: 'commit';
+  seq: number;
+  time: DatetimeString;
+  evt: CommitEvt;
+};
 type TypedSyncEvt = {
-  type: 'sync'
-  seq: number
-  time: DatetimeString
-  evt: SyncEvt
-}
+  type: 'sync';
+  seq: number;
+  time: DatetimeString;
+  evt: SyncEvt;
+};
 type TypedIdentityEvt = {
-  type: 'identity'
-  seq: number
-  time: DatetimeString
-  evt: IdentityEvt
-}
+  type: 'identity';
+  seq: number;
+  time: DatetimeString;
+  evt: IdentityEvt;
+};
 type TypedAccountEvt = {
-  type: 'account'
-  seq: number
-  time: DatetimeString
-  evt: AccountEvt
-}
+  type: 'account';
+  seq: number;
+  time: DatetimeString;
+  evt: AccountEvt;
+};
 export type SeqEvt =
   | TypedCommitEvt
   | TypedSyncEvt
   | TypedIdentityEvt
-  | TypedAccountEvt
+  | TypedAccountEvt;

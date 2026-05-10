@@ -1,7 +1,7 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { isValidDidDocForService } from './util.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { isValidDidDocForService } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.checkAccountStatus, {
@@ -11,7 +11,7 @@ export default function (server: Server, ctx: AppContext) {
       },
     }),
     handler: async ({ auth }) => {
-      const requester = auth.credentials.did
+      const requester = auth.credentials.did;
       const [
         repoRoot,
         repoBlocks,
@@ -25,12 +25,12 @@ export default function (server: Server, ctx: AppContext) {
           store.record.recordCount(),
           store.repo.blob.blobCount(),
           store.repo.blob.recordBlobCount(),
-        ])
-      })
+        ]);
+      });
       const [activated, validDid] = await Promise.all([
         ctx.accountManager.isAccountActivated(requester),
         isValidDidDocForService(ctx, requester),
-      ])
+      ]);
 
       return {
         encoding: 'application/json' as const,
@@ -45,7 +45,7 @@ export default function (server: Server, ctx: AppContext) {
           expectedBlobs,
           importedBlobs,
         },
-      }
+      };
     },
-  })
+  });
 }

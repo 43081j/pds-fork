@@ -1,4 +1,4 @@
-import { Kysely, sql } from 'kysely'
+import { Kysely, sql } from 'kysely';
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -11,7 +11,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('parameters', 'varchar', (col) => col.notNull())
     .addColumn('expiresAt', 'varchar', (col) => col.notNull())
     .addColumn('code', 'varchar')
-    .execute()
+    .execute();
 
   await db.schema
     .createIndex('authorization_request_code_idx')
@@ -19,13 +19,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .on('authorization_request')
     // https://github.com/kysely-org/kysely/issues/302
     .expression(sql`code DESC) WHERE (code IS NOT NULL`)
-    .execute()
+    .execute();
 
   await db.schema
     .createIndex('authorization_request_expires_at_idx')
     .on('authorization_request')
     .column('expiresAt')
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('device')
@@ -35,7 +35,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('ipAddress', 'varchar', (col) => col.notNull())
     .addColumn('lastSeenAt', 'varchar', (col) => col.notNull())
     .addUniqueConstraint('device_session_id_idx', ['sessionId'])
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('device_account')
@@ -55,7 +55,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ['id'],
       (qb) => qb.onDelete('cascade').onUpdate('cascade'),
     )
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('token')
@@ -76,13 +76,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       'currentRefreshToken',
     ])
     .addUniqueConstraint('token_id_unique_idx', ['tokenId'])
-    .execute()
+    .execute();
 
   await db.schema
     .createIndex('token_did_idx')
     .on('token')
     .column('did')
-    .execute()
+    .execute();
 
   await db.schema
     .createIndex('token_code_idx')
@@ -90,7 +90,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .on('token')
     // https://github.com/kysely-org/kysely/issues/302
     .expression(sql`code DESC) WHERE (code IS NOT NULL`)
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('used_refresh_token')
@@ -104,19 +104,19 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       // uses "used_refresh_token_id_idx" index (when cascading)
       (qb) => qb.onDelete('cascade').onUpdate('cascade'),
     )
-    .execute()
+    .execute();
 
   await db.schema
     .createIndex('used_refresh_token_id_idx')
     .on('used_refresh_token')
     .column('tokenId')
-    .execute()
+    .execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('used_refresh_token').execute()
-  await db.schema.dropTable('token').execute()
-  await db.schema.dropTable('device_account').execute()
-  await db.schema.dropTable('device').execute()
-  await db.schema.dropTable('authorization_request').execute()
+  await db.schema.dropTable('used_refresh_token').execute();
+  await db.schema.dropTable('token').execute();
+  await db.schema.dropTable('device_account').execute();
+  await db.schema.dropTable('device').execute();
+  await db.schema.dropTable('authorization_request').execute();
 }

@@ -2,15 +2,15 @@
 // this is a relatively non-invasive change to express
 // they get handled in the error.handler middleware
 // leave at top of file before importing Routes
-import 'express-async-errors'
+import 'express-async-errors';
 
-import events from 'node:events'
-import http from 'node:http'
-import { PlcClientError } from '@did-plc/lib'
-import cors from 'cors'
-import express from 'express'
-import { HttpTerminator, createHttpTerminator } from 'http-terminator'
-import { DAY, HOUR, MINUTE, SECOND } from '@atproto/common'
+import events from 'node:events';
+import http from 'node:http';
+import { PlcClientError } from '@did-plc/lib';
+import cors from 'cors';
+import express from 'express';
+import { HttpTerminator, createHttpTerminator } from 'http-terminator';
+import { DAY, HOUR, MINUTE, SECOND } from '@atproto/common';
 import {
   MemoryRateLimiter,
   MethodHandler,
@@ -18,34 +18,34 @@ import {
   ResponseType,
   XRPCError,
   createServer,
-} from '@atproto/xrpc-server'
-import apiRoutes from './api/index.js'
-import * as authRoutes from './auth-routes.js'
-import * as basicRoutes from './basic-routes.js'
-import { ServerConfig, ServerSecrets } from './config/index.js'
-import { AppContext, AppContextOptions } from './context.js'
-import * as error from './error.js'
-import { app } from './lexicons.js'
-import { loggerMiddleware } from './logger.js'
-import { proxyHandler } from './pipethrough.js'
-import compression from './util/compression.js'
-import * as wellKnown from './well-known.js'
+} from '@atproto/xrpc-server';
+import apiRoutes from './api/index.js';
+import * as authRoutes from './auth-routes.js';
+import * as basicRoutes from './basic-routes.js';
+import { ServerConfig, ServerSecrets } from './config/index.js';
+import { AppContext, AppContextOptions } from './context.js';
+import * as error from './error.js';
+import { app } from './lexicons.js';
+import { loggerMiddleware } from './logger.js';
+import { proxyHandler } from './pipethrough.js';
+import compression from './util/compression.js';
+import * as wellKnown from './well-known.js';
 
-export * from './lexicons.js'
+export * from './lexicons.js';
 export {
   bearerTokenFromReq,
   createPublicKeyObject,
   createSecretKeyObject,
-} from './auth-verifier.js'
-export * from './config/index.js'
-export { AppContext } from './context.js'
-export { Database } from './db/index.js'
-export { DiskBlobStore } from './disk-blobstore.js'
-export { httpLogger } from './logger.js'
-export { type CommitDataWithOps, type PreparedWrite } from './repo/index.js'
-export * as repoPrepare from './repo/prepare.js'
-export { scripts } from './scripts/index.js'
-export * as sequencer from './sequencer/index.js'
+} from './auth-verifier.js';
+export * from './config/index.js';
+export { AppContext } from './context.js';
+export { Database } from './db/index.js';
+export { DiskBlobStore } from './disk-blobstore.js';
+export { httpLogger } from './logger.js';
+export { type CommitDataWithOps, type PreparedWrite } from './repo/index.js';
+export * as repoPrepare from './repo/prepare.js';
+export { scripts } from './scripts/index.js';
+export * as sequencer from './sequencer/index.js';
 
 /**
  * @deprecated Legacy export for backwards compatibility
@@ -55,19 +55,19 @@ export type SkeletonHandler = MethodHandler<
   app.bsky.feed.getFeedSkeleton.$Params,
   void,
   app.bsky.feed.getFeedSkeleton.$Output
->
+>;
 
 export class PDS {
-  public ctx: AppContext
-  public app: express.Application
-  public server?: http.Server
-  private terminator?: HttpTerminator
-  private dbStatsInterval?: NodeJS.Timeout
-  private sequencerStatsInterval?: NodeJS.Timeout
+  public ctx: AppContext;
+  public app: express.Application;
+  public server?: http.Server;
+  private terminator?: HttpTerminator;
+  private dbStatsInterval?: NodeJS.Timeout;
+  private sequencerStatsInterval?: NodeJS.Timeout;
 
   constructor(opts: { ctx: AppContext; app: express.Application }) {
-    this.ctx = opts.ctx
-    this.app = opts.app
+    this.ctx = opts.ctx;
+    this.app = opts.app;
   }
 
   static async create(
@@ -75,9 +75,9 @@ export class PDS {
     secrets: ServerSecrets,
     overrides?: Partial<AppContextOptions>,
   ): Promise<PDS> {
-    const ctx = await AppContext.fromConfig(cfg, secrets, overrides)
+    const ctx = await AppContext.fromConfig(cfg, secrets, overrides);
 
-    const { rateLimits } = ctx.cfg
+    const { rateLimits } = ctx.cfg;
 
     const server = createServer([], {
       validateResponse: cfg.service.devMode,
@@ -94,20 +94,20 @@ export class PDS {
             err.data != null &&
             'message' in err.data &&
             typeof err.data.message === 'string' &&
-            err.data.message
+            err.data.message;
 
           const type =
             err.status >= 500
               ? ResponseType.UpstreamFailure
-              : ResponseType.InvalidRequest
+              : ResponseType.InvalidRequest;
 
           return new XRPCError(
             type,
             payloadMessage || 'Unable to perform PLC operation',
-          )
+          );
         }
 
-        return XRPCError.fromError(err)
+        return XRPCError.fromError(err);
       },
       rateLimits: rateLimits.enabled
         ? {
@@ -115,17 +115,17 @@ export class PDS {
               ? (opts) => new RedisRateLimiter(ctx.redisScratch, opts)
               : (opts) => new MemoryRateLimiter(opts),
             bypass: ({ req }) => {
-              const { bypassKey, bypassIps } = rateLimits
+              const { bypassKey, bypassIps } = rateLimits;
               if (
                 bypassKey &&
                 bypassKey === req.headers['x-ratelimit-bypass']
               ) {
-                return true
+                return true;
               }
               if (bypassIps && req.ip && bypassIps.includes(req.ip)) {
-                return true
+                return true;
               }
-              return false
+              return false;
             },
             global: [
               {
@@ -148,11 +148,11 @@ export class PDS {
             ],
           }
         : undefined,
-    })
+    });
 
-    apiRoutes(server, ctx)
+    apiRoutes(server, ctx);
 
-    const app = express()
+    const app = express();
     app.set('trust proxy', [
       // e.g. load balancer
       'loopback',
@@ -160,47 +160,47 @@ export class PDS {
       'uniquelocal',
       // e.g. trust x-forwarded-for via entryway ip
       ...getTrustedIps(cfg),
-    ])
-    app.use(loggerMiddleware)
-    app.use(compression())
-    app.use(authRoutes.createRouter(ctx)) // Before CORS
-    app.use(cors({ maxAge: DAY / SECOND }))
-    app.use(basicRoutes.createRouter(ctx))
-    app.use(wellKnown.createRouter(ctx))
-    app.use(server.router)
-    app.use(error.handler)
+    ]);
+    app.use(loggerMiddleware);
+    app.use(compression());
+    app.use(authRoutes.createRouter(ctx)); // Before CORS
+    app.use(cors({ maxAge: DAY / SECOND }));
+    app.use(basicRoutes.createRouter(ctx));
+    app.use(wellKnown.createRouter(ctx));
+    app.use(server.router);
+    app.use(error.handler);
 
     return new PDS({
       ctx,
       app,
-    })
+    });
   }
 
   async start(): Promise<http.Server> {
-    await this.ctx.sequencer.start()
-    const server = this.app.listen(this.ctx.cfg.service.port)
-    this.server = server
-    this.server.keepAliveTimeout = 90000
-    this.terminator = createHttpTerminator({ server })
-    await events.once(server, 'listening')
-    return server
+    await this.ctx.sequencer.start();
+    const server = this.app.listen(this.ctx.cfg.service.port);
+    this.server = server;
+    this.server.keepAliveTimeout = 90000;
+    this.terminator = createHttpTerminator({ server });
+    await events.once(server, 'listening');
+    return server;
   }
 
   async destroy(): Promise<void> {
-    await this.ctx.sequencer.destroy()
-    await this.terminator?.terminate()
-    await this.ctx.backgroundQueue.destroy()
-    await this.ctx.accountManager.close()
-    await this.ctx.redisScratch?.quit()
-    await this.ctx.proxyAgent.destroy()
-    clearInterval(this.dbStatsInterval)
-    clearInterval(this.sequencerStatsInterval)
+    await this.ctx.sequencer.destroy();
+    await this.terminator?.terminate();
+    await this.ctx.backgroundQueue.destroy();
+    await this.ctx.accountManager.close();
+    await this.ctx.redisScratch?.quit();
+    await this.ctx.proxyAgent.destroy();
+    clearInterval(this.dbStatsInterval);
+    clearInterval(this.sequencerStatsInterval);
   }
 }
 
-export default PDS
+export default PDS;
 
 const getTrustedIps = (cfg: ServerConfig) => {
-  if (!cfg.rateLimits.enabled) return []
-  return cfg.rateLimits.bypassIps ?? []
-}
+  if (!cfg.rateLimits.enabled) return [];
+  return cfg.rateLimits.bypassIps ?? [];
+};

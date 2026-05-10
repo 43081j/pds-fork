@@ -1,18 +1,18 @@
-import { DAY, MINUTE } from '@atproto/common'
-import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax'
+import { DAY, MINUTE } from '@atproto/common';
+import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax';
 import {
   AuthRequiredError,
   MethodRateLimit,
   Server,
-} from '@atproto/xrpc-server'
-import { formatAccountStatus } from '../../../../account-manager/account-manager.js'
-import { OLD_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { didDocForSession } from './util.js'
+} from '@atproto/xrpc-server';
+import { formatAccountStatus } from '../../../../account-manager/account-manager.js';
+import { OLD_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { didDocForSession } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx
+  const { entrywayClient } = ctx;
 
   const rateLimit: MethodRateLimit<
     void,
@@ -29,19 +29,19 @@ export default function (server: Server, ctx: AppContext) {
       points: 30,
       calcKey: ({ input, req }) => `${input.body.identifier}-${req.ip}`,
     },
-  ]
+  ];
 
   if (entrywayClient) {
     server.add(com.atproto.server.createSession, {
       rateLimit,
       handler: async ({ input: { body }, req }) => {
-        const { headers } = ctx.entrywayPassthruHeaders(req)
+        const { headers } = ctx.entrywayPassthruHeaders(req);
         return entrywayClient.xrpc(com.atproto.server.createSession, {
           headers,
           body,
-        })
+        });
       },
-    })
+    });
   } else {
     server.add(com.atproto.server.createSession, {
       rateLimit,
@@ -51,17 +51,17 @@ export default function (server: Server, ctx: AppContext) {
         if (body.password.length > OLD_PASSWORD_MAX_LENGTH) {
           throw new AuthRequiredError(
             'Password too long. Consider resetting your password.',
-          )
+          );
         }
 
         const { user, isSoftDeleted, appPassword } =
-          await ctx.accountManager.login(body)
+          await ctx.accountManager.login(body);
 
         if (!body.allowTakendown && isSoftDeleted) {
           throw new AuthRequiredError(
             'Account has been taken down',
             'AccountTakedown',
-          )
+          );
         }
 
         const [{ accessJwt, refreshJwt }, didDoc] = await Promise.all([
@@ -71,9 +71,9 @@ export default function (server: Server, ctx: AppContext) {
             isSoftDeleted,
           ),
           didDocForSession(ctx, user.did),
-        ])
+        ]);
 
-        const { status, active } = formatAccountStatus(user)
+        const { status, active } = formatAccountStatus(user);
 
         return {
           encoding: 'application/json',
@@ -90,8 +90,8 @@ export default function (server: Server, ctx: AppContext) {
             active,
             status,
           },
-        }
+        };
       },
-    })
+    });
   }
 }

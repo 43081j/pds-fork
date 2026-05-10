@@ -1,19 +1,19 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { ACCESS_FULL } from '../../../../auth-scope.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ACCESS_FULL } from '../../../../auth-scope.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx
+  const { entrywayClient } = ctx;
 
   const auth = ctx.authVerifier.authorization({
     // @NOTE Reflect any change in signPlcOperation
     scopes: ACCESS_FULL,
     additional: ['com.atproto.takendown'],
     authorize: (permissions) => {
-      permissions.assertIdentity({ attr: '*' })
+      permissions.assertIdentity({ attr: '*' });
     },
-  })
+  });
 
   if (entrywayClient) {
     // @TODO we should have a higher level way of defining these "passthrough"
@@ -25,35 +25,35 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.identity.requestPlcOperationSignature.$lxm,
-        )
+        );
         await entrywayClient.xrpc(
           com.atproto.identity.requestPlcOperationSignature,
           { headers },
-        )
+        );
       },
-    })
+    });
   } else {
     server.add(com.atproto.identity.requestPlcOperationSignature, {
       auth,
       handler: async ({ auth }) => {
-        const did = auth.credentials.did
+        const did = auth.credentials.did;
         const account = await ctx.accountManager.getAccount(did, {
           includeDeactivated: true,
           includeTakenDown: true,
-        })
+        });
         if (!account) {
-          throw new InvalidRequestError('account not found')
+          throw new InvalidRequestError('account not found');
         } else if (!account.email) {
           throw new InvalidRequestError(
             'account does not have an email address',
-          )
+          );
         }
         const token = await ctx.accountManager.createEmailToken(
           did,
           'plc_operation',
-        )
-        await ctx.mailer.sendPlcOperation({ token }, { to: account.email })
+        );
+        await ctx.mailer.sendPlcOperation({ token }, { to: account.email });
       },
-    })
+    });
   }
 }

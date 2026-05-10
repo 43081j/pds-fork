@@ -1,7 +1,7 @@
-import { Selectable } from 'kysely'
-import { DeviceData, DeviceId } from '@atproto/oauth-provider'
-import { fromDateISO, toDateISO } from '../../db/index.js'
-import { AccountDb, Device } from '../db/index.js'
+import { Selectable } from 'kysely';
+import { DeviceData, DeviceId } from '@atproto/oauth-provider';
+import { fromDateISO, toDateISO } from '../../db/index.js';
+import { AccountDb, Device } from '../db/index.js';
 
 export const rowToDeviceData = (
   row: Omit<Selectable<Device>, 'id'>,
@@ -10,7 +10,7 @@ export const rowToDeviceData = (
   userAgent: row.userAgent,
   ipAddress: row.ipAddress,
   lastSeenAt: fromDateISO(row.lastSeenAt),
-})
+});
 
 export const createQB = (
   db: AccountDb,
@@ -23,10 +23,10 @@ export const createQB = (
     userAgent,
     ipAddress,
     lastSeenAt: toDateISO(lastSeenAt),
-  })
+  });
 
 export const readQB = (db: AccountDb, deviceId: DeviceId) =>
-  db.db.selectFrom('device').where('id', '=', deviceId).selectAll()
+  db.db.selectFrom('device').where('id', '=', deviceId).selectAll();
 
 export const updateQB = (
   db: AccountDb,
@@ -41,7 +41,7 @@ export const updateQB = (
     .if(lastSeenAt != null, (qb) =>
       qb.set({ lastSeenAt: toDateISO(lastSeenAt!) }),
     )
-    .where('id', '=', deviceId)
+    .where('id', '=', deviceId);
 
 export const removeQB = (db: AccountDb, deviceId: DeviceId) =>
-  db.db.deleteFrom('device').where('id', '=', deviceId)
+  db.db.deleteFrom('device').where('id', '=', deviceId);

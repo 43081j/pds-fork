@@ -1,22 +1,18 @@
-import { chunkArray } from '@atproto/common'
-import { Cid, parseCid } from '@atproto/lex-data'
-import { BlockMap, CommitData, RepoStorage } from '@atproto/repo'
-import { ActorDb, RepoBlock } from '../db/index.js'
-import { SqlRepoReader } from './sql-repo-reader.js'
+import { chunkArray } from '@atproto/common';
+import { Cid, parseCid } from '@atproto/lex-data';
+import { BlockMap, CommitData, RepoStorage } from '@atproto/repo';
+import { ActorDb, RepoBlock } from '../db/index.js';
+import { SqlRepoReader } from './sql-repo-reader.js';
 
 export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
-  cache = new BlockMap()
-  now: string
-  did: string
+  cache = new BlockMap();
+  now: string;
+  did: string;
 
-  constructor(
-    db: ActorDb,
-    did: string,
-    now?: string,
-  ) {
-    super(db)
-    this.did = did
-    this.now = now ?? new Date().toISOString()
+  constructor(db: ActorDb, did: string, now?: string) {
+    super(db);
+    this.did = did;
+    this.now = now ?? new Date().toISOString();
   }
 
   // proactively cache all blocks from a particular commit (to prevent multiple roundtrips)
@@ -26,9 +22,9 @@ export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
       .where('repoRev', '=', rev)
       .select(['repo_block.cid', 'repo_block.content'])
       .limit(15)
-      .execute()
+      .execute();
     for (const row of res) {
-      this.cache.set(parseCid(row.cid), row.content)
+      this.cache.set(parseCid(row.cid), row.content);
     }
   }
 
@@ -42,8 +38,8 @@ export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
         content: block,
       })
       .onConflict((oc) => oc.doNothing())
-      .execute()
-    this.cache.set(cid, block)
+      .execute();
+    this.cache.set(cid, block);
   }
 
   async putMany(toPut: BlockMap, rev: string): Promise<void> {
@@ -52,30 +48,30 @@ export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
       repoRev: rev,
       size: bytes.length,
       content: bytes,
-    }))
+    }));
 
     for (const batch of chunkArray(blocks, 50)) {
       await this.db.db
         .insertInto('repo_block')
         .values(batch)
         .onConflict((oc) => oc.doNothing())
-        .execute()
+        .execute();
     }
   }
 
   async deleteMany(cids: Cid[]) {
-    if (cids.length < 1) return
-    const cidStrs = cids.map((c) => c.toString())
+    if (cids.length < 1) return;
+    const cidStrs = cids.map((c) => c.toString());
     await this.db.db
       .deleteFrom('repo_block')
       .where('cid', 'in', cidStrs)
-      .execute()
+      .execute();
   }
 
   async applyCommit(commit: CommitData, isCreate?: boolean) {
-    await this.updateRoot(commit.cid, commit.rev, isCreate)
-    await this.putMany(commit.newBlocks, commit.rev)
-    await this.deleteMany(commit.removedCids.toList())
+    await this.updateRoot(commit.cid, commit.rev, isCreate);
+    await this.putMany(commit.newBlocks, commit.rev);
+    await this.deleteMany(commit.removedCids.toList());
   }
 
   async updateRoot(cid: Cid, rev: string, isCreate = false): Promise<void> {
@@ -88,7 +84,7 @@ export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
           rev: rev,
           indexedAt: this.now,
         })
-        .execute()
+        .execute();
     } else {
       await this.db.db
         .updateTable('repo_root')
@@ -97,11 +93,11 @@ export class SqlRepoTransactor extends SqlRepoReader implements RepoStorage {
           rev: rev,
           indexedAt: this.now,
         })
-        .execute()
+        .execute();
     }
   }
 
   async destroy(): Promise<void> {
-    throw new Error('Destruction of SQL repo storage not allowed at runtime')
+    throw new Error('Destruction of SQL repo storage not allowed at runtime');
   }
 }

@@ -1,21 +1,21 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { app } from '../../../../lexicons.js'
-import { computeProxyTo } from '../../../../pipethrough.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { app } from '../../../../lexicons.js';
+import { computeProxyTo } from '../../../../pipethrough.js';
 import {
   MungeFn,
   pipethroughReadAfterWrite,
-} from '../../../../read-after-write/index.js'
+} from '../../../../read-after-write/index.js';
 
 export default function (server: Server, ctx: AppContext) {
-  if (!ctx.bskyAppView) return
+  if (!ctx.bskyAppView) return;
 
   server.add(app.bsky.feed.getActorLikes, {
     auth: ctx.authVerifier.authorization({
       authorize: (permissions, { req }) => {
-        const lxm = app.bsky.feed.getActorLikes.$lxm
-        const aud = computeProxyTo(ctx, req, lxm)
-        permissions.assertRpc({ aud, lxm })
+        const lxm = app.bsky.feed.getActorLikes.$lxm;
+        const aud = computeProxyTo(ctx, req, lxm);
+        permissions.assertRpc({ aud, lxm });
       },
     }),
     handler: async (reqCtx) => {
@@ -24,9 +24,9 @@ export default function (server: Server, ctx: AppContext) {
         reqCtx,
         app.bsky.feed.getActorLikes,
         getAuthorMunge,
-      )
+      );
     },
-  })
+  });
 }
 
 const getAuthorMunge: MungeFn<app.bsky.feed.getActorLikes.$OutputBody> = async (
@@ -35,8 +35,8 @@ const getAuthorMunge: MungeFn<app.bsky.feed.getActorLikes.$OutputBody> = async (
   local,
   requester,
 ) => {
-  const localProf = local.profile
-  let feed = original.feed
+  const localProf = local.profile;
+  let feed = original.feed;
   // first update any out of date profile pictures in feed
   if (localProf) {
     feed = feed.map((item) => {
@@ -50,14 +50,14 @@ const getAuthorMunge: MungeFn<app.bsky.feed.getActorLikes.$OutputBody> = async (
               localProf.record,
             ),
           },
-        }
+        };
       } else {
-        return item
+        return item;
       }
-    })
+    });
   }
   return {
     ...original,
     feed,
-  }
-}
+  };
+};

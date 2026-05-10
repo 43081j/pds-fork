@@ -1,17 +1,17 @@
-import { xrpc } from '@atproto/lex'
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { computeProxyTo, parseProxyInfo } from '../../../../pipethrough.js'
+import { xrpc } from '@atproto/lex';
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { computeProxyTo, parseProxyInfo } from '../../../../pipethrough.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.moderation.createReport, {
     auth: ctx.authVerifier.authorization({
       additional: ['com.atproto.takendown'],
       authorize: (permissions, { req }) => {
-        const lxm = com.atproto.moderation.createReport.$lxm
-        const aud = computeProxyTo(ctx, req, lxm)
-        permissions.assertRpc({ aud, lxm })
+        const lxm = com.atproto.moderation.createReport.$lxm;
+        const aud = computeProxyTo(ctx, req, lxm);
+        permissions.assertRpc({ aud, lxm });
       },
     }),
     handler: async ({ auth, params, input: { body }, req }) => {
@@ -19,13 +19,13 @@ export default function (server: Server, ctx: AppContext) {
         ctx,
         req,
         com.atproto.moderation.createReport.$lxm,
-      )
+      );
 
       const { headers } = await ctx.serviceAuthHeaders(
         auth.credentials.did,
         aud,
         com.atproto.moderation.createReport.$lxm,
-      )
+      );
 
       return xrpc(url, com.atproto.moderation.createReport, {
         validateRequest: ctx.cfg.service.devMode,
@@ -34,7 +34,7 @@ export default function (server: Server, ctx: AppContext) {
         headers,
         params,
         body,
-      })
+      });
     },
-  })
+  });
 }

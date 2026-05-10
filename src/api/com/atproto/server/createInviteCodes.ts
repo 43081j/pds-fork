@@ -1,12 +1,12 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { genInvCodes } from './util.js'
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { genInvCodes } from './util.js';
 
-type AccountCodes = com.atproto.server.createInviteCodes.AccountCodes
+type AccountCodes = com.atproto.server.createInviteCodes.AccountCodes;
 
 export default function (server: Server, ctx: AppContext) {
-  const { entryway } = ctx.cfg
+  const { entryway } = ctx.cfg;
 
   if (entryway) {
     server.add(com.atproto.server.createInviteCodes, {
@@ -14,29 +14,29 @@ export default function (server: Server, ctx: AppContext) {
       handler: () => {
         throw new InvalidRequestError(
           'Account invites are managed by the entryway service',
-        )
+        );
       },
-    })
+    });
   } else {
     server.add(com.atproto.server.createInviteCodes, {
       auth: ctx.authVerifier.adminToken,
       handler: async ({ input }) => {
-        const { codeCount, useCount } = input.body
+        const { codeCount, useCount } = input.body;
 
-        const forAccounts = input.body.forAccounts ?? ['admin']
+        const forAccounts = input.body.forAccounts ?? ['admin'];
 
-        const accountCodes: AccountCodes[] = []
+        const accountCodes: AccountCodes[] = [];
         for (const account of forAccounts) {
-          const codes = genInvCodes(ctx.cfg, codeCount)
-          accountCodes.push({ account, codes })
+          const codes = genInvCodes(ctx.cfg, codeCount);
+          accountCodes.push({ account, codes });
         }
-        await ctx.accountManager.createInviteCodes(accountCodes, useCount)
+        await ctx.accountManager.createInviteCodes(accountCodes, useCount);
 
         return {
           encoding: 'application/json' as const,
           body: { codes: accountCodes },
-        }
+        };
       },
-    })
+    });
   }
 }

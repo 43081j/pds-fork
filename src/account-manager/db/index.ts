@@ -1,10 +1,10 @@
-import { Database, Migrator } from '../../db/index.js'
-import migrations from './migrations/index.js'
-import { DatabaseSchema } from './schema/index.js'
+import { Database, Migrator } from '../../db/index.js';
+import migrations from './migrations/index.js';
+import { DatabaseSchema } from './schema/index.js';
 
-export * from './schema/index.js'
+export * from './schema/index.js';
 
-export type AccountDb = Database<DatabaseSchema>
+export type AccountDb = Database<DatabaseSchema>;
 
 export const getDb = (
   location: string,
@@ -12,10 +12,10 @@ export const getDb = (
 ): AccountDb => {
   const pragmas: Record<string, string> = disableWalAutoCheckpoint
     ? { wal_autocheckpoint: '0' }
-    : {}
-  return Database.sqlite(location, { pragmas })
-}
+    : {};
+  return Database.sqlite(location, { pragmas });
+};
 
 export const getMigrator = (db: AccountDb) => {
-  return new Migrator(db.db, migrations)
-}
+  return new Migrator(db.db, migrations);
+};

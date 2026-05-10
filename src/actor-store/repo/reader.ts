@@ -1,32 +1,32 @@
-import { BlobStore } from '@atproto/repo'
-import { SyncEvtData } from '../../repo/index.js'
-import { BlobReader } from '../blob/reader.js'
-import { ActorDb } from '../db/index.js'
-import { RecordReader } from '../record/reader.js'
-import { SqlRepoReader } from './sql-repo-reader.js'
+import { BlobStore } from '@atproto/repo';
+import { SyncEvtData } from '../../repo/index.js';
+import { BlobReader } from '../blob/reader.js';
+import { ActorDb } from '../db/index.js';
+import { RecordReader } from '../record/reader.js';
+import { SqlRepoReader } from './sql-repo-reader.js';
 
 export class RepoReader {
-  blob: BlobReader
-  record: RecordReader
-  storage: SqlRepoReader
-  db: ActorDb
-  blobstore: BlobStore
+  blob: BlobReader;
+  record: RecordReader;
+  storage: SqlRepoReader;
+  db: ActorDb;
+  blobstore: BlobStore;
 
   constructor(db: ActorDb, blobstore: BlobStore) {
-    this.db = db
-    this.blobstore = blobstore
-    this.blob = new BlobReader(db, blobstore)
-    this.record = new RecordReader(db)
-    this.storage = new SqlRepoReader(db)
+    this.db = db;
+    this.blobstore = blobstore;
+    this.blob = new BlobReader(db, blobstore);
+    this.record = new RecordReader(db);
+    this.storage = new SqlRepoReader(db);
   }
 
   async getSyncEventData(): Promise<SyncEvtData> {
-    const root = await this.storage.getRootDetailed()
-    const { blocks } = await this.storage.getBlocks([root.cid])
+    const root = await this.storage.getRootDetailed();
+    const { blocks } = await this.storage.getBlocks([root.cid]);
     return {
       cid: root.cid,
       rev: root.rev,
       blocks,
-    }
+    };
   }
 }

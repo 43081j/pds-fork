@@ -1,14 +1,17 @@
-import { HOUR, MINUTE } from '@atproto/common'
-import { l } from '@atproto/lex'
+import { HOUR, MINUTE } from '@atproto/common';
+import { l } from '@atproto/lex';
 import {
   InvalidRequestError,
   Server,
   createServiceJwt,
-} from '@atproto/xrpc-server'
-import { isAccessPrivileged, isTakendown } from '../../../../auth-scope.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { PRIVILEGED_METHODS, PROTECTED_METHODS } from '../../../../pipethrough.js'
+} from '@atproto/xrpc-server';
+import { isAccessPrivileged, isTakendown } from '../../../../auth-scope.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import {
+  PRIVILEGED_METHODS,
+  PROTECTED_METHODS,
+} from '../../../../pipethrough.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.getServiceAuth, {
@@ -17,15 +20,15 @@ export default function (server: Server, ctx: AppContext) {
     >({
       additional: ['com.atproto.takendown'],
       authorize: (permissions, { params }) => {
-        const { aud, lxm = '*' } = params
-        permissions.assertRpc({ aud, lxm })
+        const { aud, lxm = '*' } = params;
+        permissions.assertRpc({ aud, lxm });
       },
     }),
     handler: async ({ params, auth }) => {
-      const did = auth.credentials.did
+      const did = auth.credentials.did;
 
       // @NOTE "exp" is expressed in seconds since epoch, not milliseconds
-      const { aud, exp, lxm = null } = params
+      const { aud, exp, lxm = null } = params;
 
       // Takendown accounts should not be able to generate service auth tokens except for methods necessary for account migration
       if (auth.credentials.type === 'access') {
@@ -35,7 +38,7 @@ export default function (server: Server, ctx: AppContext) {
           isTakendown(auth.credentials.scope) &&
           lxm !== com.atproto.server.createAccount.$lxm
         ) {
-          throw new InvalidRequestError('Bad token scope', 'InvalidToken')
+          throw new InvalidRequestError('Bad token scope', 'InvalidToken');
         }
 
         // @NOTE "oauth" based credentials already checked through permission
@@ -47,37 +50,37 @@ export default function (server: Server, ctx: AppContext) {
         ) {
           throw new InvalidRequestError(
             `insufficient access to request a service auth token for the following method: ${lxm}`,
-          )
+          );
         }
       }
 
       if (exp) {
-        const diff = exp * 1000 - Date.now()
+        const diff = exp * 1000 - Date.now();
         if (diff < 0) {
           throw new InvalidRequestError(
             'expiration is in past',
             'BadExpiration',
-          )
+          );
         } else if (diff > HOUR) {
           throw new InvalidRequestError(
             'cannot request a token with an expiration more than an hour in the future',
             'BadExpiration',
-          )
+          );
         } else if (!lxm && diff > MINUTE) {
           throw new InvalidRequestError(
             'cannot request a method-less token with an expiration more than a minute in the future',
             'BadExpiration',
-          )
+          );
         }
       }
 
       if (lxm && PROTECTED_METHODS.has(lxm)) {
         throw new InvalidRequestError(
           `cannot request a service auth token for the following protected method: ${lxm}`,
-        )
+        );
       }
 
-      const keypair = await ctx.actorStore.keypair(did)
+      const keypair = await ctx.actorStore.keypair(did);
 
       const token = await createServiceJwt({
         iss: did,
@@ -85,13 +88,13 @@ export default function (server: Server, ctx: AppContext) {
         exp,
         lxm,
         keypair,
-      })
+      });
       return {
         encoding: 'application/json' as const,
         body: {
           token,
         },
-      }
+      };
     },
-  })
+  });
 }

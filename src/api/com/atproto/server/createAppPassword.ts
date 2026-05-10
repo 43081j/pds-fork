@@ -1,10 +1,10 @@
-import { ForbiddenError, Server } from '@atproto/xrpc-server'
-import { ACCESS_FULL } from '../../../../auth-scope.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { ForbiddenError, Server } from '@atproto/xrpc-server';
+import { ACCESS_FULL } from '../../../../auth-scope.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx
+  const { entrywayClient } = ctx;
 
   const auth = ctx.authVerifier.authorization({
     checkTakedown: true,
@@ -12,9 +12,9 @@ export default function (server: Server, ctx: AppContext) {
     authorize: () => {
       throw new ForbiddenError(
         'OAuth credentials are not supported for this endpoint',
-      )
+      );
     },
-  })
+  });
 
   if (entrywayClient) {
     server.add(com.atproto.server.createAppPassword, {
@@ -24,30 +24,30 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.createAppPassword.$lxm,
-        )
+        );
 
         return entrywayClient.xrpc(com.atproto.server.createAppPassword, {
           headers,
           body,
-        })
+        });
       },
-    })
+    });
   } else {
     server.add(com.atproto.server.createAppPassword, {
       auth,
       handler: async ({ input: { body }, auth }) => {
-        const { name } = body
+        const { name } = body;
         const appPassword = await ctx.accountManager.createAppPassword(
           auth.credentials.did,
           name,
           body.privileged ?? false,
-        )
+        );
 
         return {
           encoding: 'application/json' as const,
           body: appPassword,
-        }
+        };
       },
-    })
+    });
   }
 }

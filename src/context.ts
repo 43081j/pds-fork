@@ -1,133 +1,133 @@
-import assert from 'node:assert'
-import * as plc from '@did-plc/lib'
-import express from 'express'
-import { Redis } from 'ioredis'
-import * as nodemailer from 'nodemailer'
-import * as undici from 'undici'
-import { KmsKeypair, S3BlobStore } from '@atproto/aws'
-import * as crypto from '@atproto/crypto'
-import { IdResolver } from '@atproto/identity'
-import { Client } from '@atproto/lex'
+import assert from 'node:assert';
+import * as plc from '@did-plc/lib';
+import express from 'express';
+import { Redis } from 'ioredis';
+import * as nodemailer from 'nodemailer';
+import * as undici from 'undici';
+import { KmsKeypair, S3BlobStore } from '@atproto/aws';
+import * as crypto from '@atproto/crypto';
+import { IdResolver } from '@atproto/identity';
+import { Client } from '@atproto/lex';
 import {
   AccessTokenMode,
   JoseKey,
   LexResolver,
   OAuthProvider,
   OAuthVerifier,
-} from '@atproto/oauth-provider'
-import { BlobStore } from '@atproto/repo'
+} from '@atproto/oauth-provider';
+import { BlobStore } from '@atproto/repo';
 import {
   createServiceAuthHeaders,
   createServiceJwt,
-} from '@atproto/xrpc-server'
+} from '@atproto/xrpc-server';
 import {
   Fetch,
   isUnicastIp,
   safeFetchWrap,
   unicastLookup,
-} from '@atproto-labs/fetch-node'
-import { AccountManager } from './account-manager/account-manager.js'
-import { OAuthStore } from './account-manager/oauth-store.js'
-import { ScopeReferenceGetter } from './account-manager/scope-reference-getter.js'
-import { ActorStore } from './actor-store/actor-store.js'
-import { authPassthru, forwardedFor } from './api/proxy.js'
+} from '@atproto-labs/fetch-node';
+import { AccountManager } from './account-manager/account-manager.js';
+import { OAuthStore } from './account-manager/oauth-store.js';
+import { ScopeReferenceGetter } from './account-manager/scope-reference-getter.js';
+import { ActorStore } from './actor-store/actor-store.js';
+import { authPassthru, forwardedFor } from './api/proxy.js';
 import {
   AuthVerifier,
   createPublicKeyObject,
   createSecretKeyObject,
-} from './auth-verifier.js'
-import { BackgroundQueue } from './background.js'
-import { BskyAppView } from './bsky-app-view.js'
-import { ServerConfig, ServerSecrets } from './config/index.js'
-import { Crawlers } from './crawlers.js'
-import { DidSqliteCache } from './did-cache/index.js'
-import { DiskBlobStore } from './disk-blobstore.js'
-import { ImageUrlBuilder } from './image/image-url-builder.js'
-import { fetchLogger, lexiconResolverLogger, oauthLogger } from './logger.js'
-import { ServerMailer } from './mailer/index.js'
-import { ModerationMailer } from './mailer/moderation.js'
-import { LocalViewer, LocalViewerCreator } from './read-after-write/viewer.js'
-import { getRedisClient } from './redis.js'
-import { Sequencer } from './sequencer/index.js'
+} from './auth-verifier.js';
+import { BackgroundQueue } from './background.js';
+import { BskyAppView } from './bsky-app-view.js';
+import { ServerConfig, ServerSecrets } from './config/index.js';
+import { Crawlers } from './crawlers.js';
+import { DidSqliteCache } from './did-cache/index.js';
+import { DiskBlobStore } from './disk-blobstore.js';
+import { ImageUrlBuilder } from './image/image-url-builder.js';
+import { fetchLogger, lexiconResolverLogger, oauthLogger } from './logger.js';
+import { ServerMailer } from './mailer/index.js';
+import { ModerationMailer } from './mailer/moderation.js';
+import { LocalViewer, LocalViewerCreator } from './read-after-write/viewer.js';
+import { getRedisClient } from './redis.js';
+import { Sequencer } from './sequencer/index.js';
 
 export type AppContextOptions = {
-  actorStore: ActorStore
-  blobstore: (did: string) => BlobStore
-  localViewer: LocalViewerCreator
-  mailer: ServerMailer
-  moderationMailer: ModerationMailer
-  didCache: DidSqliteCache
-  idResolver: IdResolver
-  plcClient: plc.Client
-  accountManager: AccountManager
-  sequencer: Sequencer
-  backgroundQueue: BackgroundQueue
-  redisScratch?: Redis
-  crawlers: Crawlers
-  bskyAppView?: BskyAppView
-  moderationClient?: Client
-  reportingClient?: Client
-  entrywayClient?: Client
-  entrywayAdminClient?: Client
-  proxyAgent: undici.Dispatcher
-  safeFetch: Fetch
-  oauthProvider?: OAuthProvider
-  authVerifier: AuthVerifier
-  plcRotationKey: crypto.Keypair
-  cfg: ServerConfig
-}
+  actorStore: ActorStore;
+  blobstore: (did: string) => BlobStore;
+  localViewer: LocalViewerCreator;
+  mailer: ServerMailer;
+  moderationMailer: ModerationMailer;
+  didCache: DidSqliteCache;
+  idResolver: IdResolver;
+  plcClient: plc.Client;
+  accountManager: AccountManager;
+  sequencer: Sequencer;
+  backgroundQueue: BackgroundQueue;
+  redisScratch?: Redis;
+  crawlers: Crawlers;
+  bskyAppView?: BskyAppView;
+  moderationClient?: Client;
+  reportingClient?: Client;
+  entrywayClient?: Client;
+  entrywayAdminClient?: Client;
+  proxyAgent: undici.Dispatcher;
+  safeFetch: Fetch;
+  oauthProvider?: OAuthProvider;
+  authVerifier: AuthVerifier;
+  plcRotationKey: crypto.Keypair;
+  cfg: ServerConfig;
+};
 
 export class AppContext {
-  public actorStore: ActorStore
-  public blobstore: (did: string) => BlobStore
-  public localViewer: LocalViewerCreator
-  public mailer: ServerMailer
-  public moderationMailer: ModerationMailer
-  public didCache: DidSqliteCache
-  public idResolver: IdResolver
-  public plcClient: plc.Client
-  public accountManager: AccountManager
-  public sequencer: Sequencer
-  public backgroundQueue: BackgroundQueue
-  public redisScratch?: Redis
-  public crawlers: Crawlers
-  public bskyAppView?: BskyAppView
-  public moderationClient: Client | undefined
-  public reportingClient: Client | undefined
-  public entrywayClient: Client | undefined
-  public entrywayAdminClient: Client | undefined
-  public proxyAgent: undici.Dispatcher
-  public safeFetch: Fetch
-  public authVerifier: AuthVerifier
-  public oauthProvider?: OAuthProvider
-  public plcRotationKey: crypto.Keypair
-  public cfg: ServerConfig
+  public actorStore: ActorStore;
+  public blobstore: (did: string) => BlobStore;
+  public localViewer: LocalViewerCreator;
+  public mailer: ServerMailer;
+  public moderationMailer: ModerationMailer;
+  public didCache: DidSqliteCache;
+  public idResolver: IdResolver;
+  public plcClient: plc.Client;
+  public accountManager: AccountManager;
+  public sequencer: Sequencer;
+  public backgroundQueue: BackgroundQueue;
+  public redisScratch?: Redis;
+  public crawlers: Crawlers;
+  public bskyAppView?: BskyAppView;
+  public moderationClient: Client | undefined;
+  public reportingClient: Client | undefined;
+  public entrywayClient: Client | undefined;
+  public entrywayAdminClient: Client | undefined;
+  public proxyAgent: undici.Dispatcher;
+  public safeFetch: Fetch;
+  public authVerifier: AuthVerifier;
+  public oauthProvider?: OAuthProvider;
+  public plcRotationKey: crypto.Keypair;
+  public cfg: ServerConfig;
 
   constructor(opts: AppContextOptions) {
-    this.actorStore = opts.actorStore
-    this.blobstore = opts.blobstore
-    this.localViewer = opts.localViewer
-    this.mailer = opts.mailer
-    this.moderationMailer = opts.moderationMailer
-    this.didCache = opts.didCache
-    this.idResolver = opts.idResolver
-    this.plcClient = opts.plcClient
-    this.accountManager = opts.accountManager
-    this.sequencer = opts.sequencer
-    this.backgroundQueue = opts.backgroundQueue
-    this.redisScratch = opts.redisScratch
-    this.crawlers = opts.crawlers
-    this.bskyAppView = opts.bskyAppView
-    this.moderationClient = opts.moderationClient
-    this.reportingClient = opts.reportingClient
-    this.entrywayClient = opts.entrywayClient
-    this.entrywayAdminClient = opts.entrywayAdminClient
-    this.proxyAgent = opts.proxyAgent
-    this.safeFetch = opts.safeFetch
-    this.authVerifier = opts.authVerifier
-    this.oauthProvider = opts.oauthProvider
-    this.plcRotationKey = opts.plcRotationKey
-    this.cfg = opts.cfg
+    this.actorStore = opts.actorStore;
+    this.blobstore = opts.blobstore;
+    this.localViewer = opts.localViewer;
+    this.mailer = opts.mailer;
+    this.moderationMailer = opts.moderationMailer;
+    this.didCache = opts.didCache;
+    this.idResolver = opts.idResolver;
+    this.plcClient = opts.plcClient;
+    this.accountManager = opts.accountManager;
+    this.sequencer = opts.sequencer;
+    this.backgroundQueue = opts.backgroundQueue;
+    this.redisScratch = opts.redisScratch;
+    this.crawlers = opts.crawlers;
+    this.bskyAppView = opts.bskyAppView;
+    this.moderationClient = opts.moderationClient;
+    this.reportingClient = opts.reportingClient;
+    this.entrywayClient = opts.entrywayClient;
+    this.entrywayAdminClient = opts.entrywayAdminClient;
+    this.proxyAgent = opts.proxyAgent;
+    this.safeFetch = opts.safeFetch;
+    this.authVerifier = opts.authVerifier;
+    this.oauthProvider = opts.oauthProvider;
+    this.plcRotationKey = opts.plcRotationKey;
+    this.cfg = opts.cfg;
   }
 
   static async fromConfig(
@@ -148,60 +148,60 @@ export class AppContext {
         : DiskBlobStore.creator(
             cfg.blobstore.location,
             cfg.blobstore.tempLocation,
-          )
+          );
 
     const mailTransport =
       cfg.email !== null
         ? nodemailer.createTransport(cfg.email.smtpUrl)
-        : nodemailer.createTransport({ jsonTransport: true })
+        : nodemailer.createTransport({ jsonTransport: true });
 
-    const mailer = new ServerMailer(mailTransport, cfg)
+    const mailer = new ServerMailer(mailTransport, cfg);
 
     const modMailTransport =
       cfg.moderationEmail !== null
         ? nodemailer.createTransport(cfg.moderationEmail.smtpUrl)
-        : nodemailer.createTransport({ jsonTransport: true })
+        : nodemailer.createTransport({ jsonTransport: true });
 
-    const moderationMailer = new ModerationMailer(modMailTransport, cfg)
+    const moderationMailer = new ModerationMailer(modMailTransport, cfg);
 
     const didCache = new DidSqliteCache(
       cfg.db.didCacheDbLoc,
       cfg.identity.cacheStaleTTL,
       cfg.identity.cacheMaxTTL,
       cfg.db.disableWalAutoCheckpoint,
-    )
-    await didCache.migrateOrThrow()
+    );
+    await didCache.migrateOrThrow();
 
     const idResolver = new IdResolver({
       plcUrl: cfg.identity.plcUrl,
       didCache,
       timeout: cfg.identity.resolverTimeout,
       backupNameservers: cfg.identity.handleBackupNameservers,
-    })
-    const plcClient = new plc.Client(cfg.identity.plcUrl)
+    });
+    const plcClient = new plc.Client(cfg.identity.plcUrl);
 
-    const backgroundQueue = new BackgroundQueue()
+    const backgroundQueue = new BackgroundQueue();
     const crawlers = new Crawlers(
       backgroundQueue,
       cfg.service.hostname,
       cfg.crawlers,
-    )
+    );
     const sequencer = new Sequencer(
       cfg.db.sequencerDbLoc,
       crawlers,
       undefined,
       cfg.db.disableWalAutoCheckpoint,
-    )
+    );
     const redisScratch = cfg.redis
       ? getRedisClient(cfg.redis.address, cfg.redis.password)
-      : undefined
+      : undefined;
 
     const bskyAppView = cfg.bskyAppView
       ? new BskyAppView({
           ...cfg.bskyAppView,
           validateResponse: cfg.service.devMode,
         })
-      : undefined
+      : undefined;
 
     const moderationClient = cfg.modService
       ? new Client(
@@ -212,7 +212,7 @@ export class AppContext {
             validateResponse: cfg.service.devMode,
           },
         )
-      : undefined
+      : undefined;
     const reportingClient = cfg.reportService
       ? new Client(
           { service: cfg.reportService.url },
@@ -222,7 +222,7 @@ export class AppContext {
             validateResponse: cfg.service.devMode,
           },
         )
-      : undefined
+      : undefined;
     const entrywayClient = cfg.entryway
       ? new Client(
           { service: cfg.entryway.url },
@@ -232,7 +232,7 @@ export class AppContext {
             validateResponse: cfg.service.devMode,
           },
         )
-      : undefined
+      : undefined;
     const entrywayAdminClient =
       cfg.entryway && secrets.entrywayAdminToken
         ? new Client(
@@ -249,22 +249,22 @@ export class AppContext {
               validateResponse: cfg.service.devMode,
             },
           )
-        : undefined
+        : undefined;
 
-    const jwtSecretKey = createSecretKeyObject(secrets.jwtSecret)
+    const jwtSecretKey = createSecretKeyObject(secrets.jwtSecret);
     const jwtPublicKey = cfg.entryway
       ? createPublicKeyObject(cfg.entryway.jwtPublicKeyHex)
-      : null
+      : null;
 
     const imageUrlBuilder = new ImageUrlBuilder(
       cfg.service.hostname,
       bskyAppView,
-    )
+    );
 
     const actorStore = new ActorStore(cfg.actorStore, {
       blobstore,
       backgroundQueue,
-    })
+    });
 
     const accountManager = new AccountManager(
       idResolver,
@@ -272,8 +272,8 @@ export class AppContext {
       cfg.service.did,
       cfg.identity.serviceHandleDomains,
       cfg.db,
-    )
-    await accountManager.migrateOrThrow()
+    );
+    await accountManager.migrateOrThrow();
 
     const plcRotationKey =
       secrets.plcRotationKey.provider === 'kms'
@@ -282,13 +282,13 @@ export class AppContext {
           })
         : await crypto.Secp256k1Keypair.import(
             secrets.plcRotationKey.privateKeyHex,
-          )
+          );
 
     const localViewer = LocalViewer.creator(
       accountManager,
       imageUrlBuilder,
       bskyAppView,
-    )
+    );
 
     // An agent for performing HTTP requests based on user provided URLs.
     const proxyAgentBase = new undici.Agent({
@@ -300,19 +300,19 @@ export class AppContext {
         ? undefined
         : (origin, opts) => {
             const { protocol, hostname } =
-              origin instanceof URL ? origin : new URL(origin)
+              origin instanceof URL ? origin : new URL(origin);
             if (protocol !== 'https:') {
-              throw new Error(`Forbidden protocol "${protocol}"`)
+              throw new Error(`Forbidden protocol "${protocol}"`);
             }
             if (isUnicastIp(hostname) === false) {
-              throw new Error('Hostname resolved to non-unicast address')
+              throw new Error('Hostname resolved to non-unicast address');
             }
-            return new undici.Pool(origin, opts)
+            return new undici.Pool(origin, opts);
           },
       connect: {
         lookup: cfg.proxy.disableSsrfProtection ? undefined : unicastLookup,
       },
-    })
+    });
     const proxyAgent =
       cfg.proxy.maxRetries > 0
         ? new undici.RetryAgent(proxyAgentBase, {
@@ -320,7 +320,7 @@ export class AppContext {
             methods: ['GET', 'HEAD'],
             maxRetries: cfg.proxy.maxRetries,
           })
-        : proxyAgentBase
+        : proxyAgentBase;
 
     /**
      * A fetch() function that protects against SSRF attacks, large responses &
@@ -348,14 +348,14 @@ export class AppContext {
       dangerouslyForceKeepAliveAgent: true,
       fetch: function (input, init) {
         const method =
-          init?.method ?? (input instanceof Request ? input.method : 'GET')
-        const uri = input instanceof Request ? input.url : String(input)
+          init?.method ?? (input instanceof Request ? input.method : 'GET');
+        const uri = input instanceof Request ? input.url : String(input);
 
-        fetchLogger.info({ method, uri }, 'fetch')
+        fetchLogger.info({ method, uri }, 'fetch');
 
-        return globalThis.fetch.call(this, input, init)
+        return globalThis.fetch.call(this, input, init);
       },
-    })
+    });
 
     const oauthProvider = cfg.oauth.provider
       ? new OAuthProvider({
@@ -388,33 +388,33 @@ export class AppContext {
                 lexiconResolverLogger.debug(
                   { nsid: nsid.toString() },
                   'Resolving lexicon DID authority',
-                )
+                );
                 // Override the lexicon did resolution to point to a custom PDS
-                return cfg.lexicon.didAuthority
+                return cfg.lexicon.didAuthority;
               },
               onResolveAuthorityResult({ nsid, did }) {
                 lexiconResolverLogger.info(
                   { nsid: nsid.toString(), did },
                   'Resolved lexicon DID',
-                )
+                );
               },
               onResolveAuthorityError({ nsid, err }) {
                 lexiconResolverLogger.error(
                   { nsid: nsid.toString(), err },
                   'Lexicon DID resolution error',
-                )
+                );
               },
               onFetchResult({ uri, cid }) {
                 lexiconResolverLogger.info(
                   { uri: uri.toString(), cid: cid.toString() },
                   'Fetched lexicon',
-                )
+                );
               },
               onFetchError({ err, uri }) {
                 lexiconResolverLogger.error(
                   { uri: uri.toString(), err },
                   'Lexicon fetch error',
-                )
+                );
               },
             },
           }),
@@ -431,14 +431,14 @@ export class AppContext {
           getClientInfo(clientId) {
             return {
               isTrusted: cfg.oauth.provider?.trustedClients?.includes(clientId),
-            }
+            };
           },
         })
-      : undefined
+      : undefined;
 
     const scopeRefGetter = entrywayClient
       ? new ScopeReferenceGetter(entrywayClient, redisScratch)
-      : undefined
+      : undefined;
 
     const oauthVerifier: OAuthVerifier =
       oauthProvider ?? // OAuthProvider extends OAuthVerifier
@@ -454,16 +454,16 @@ export class AppContext {
             oauthLogger.info(
               { htu: dpopProof.htu, client_id: payload.client_id },
               'DPoP proof "htu" contains query or fragment',
-            )
+            );
           }
 
           if (scopeRefGetter) {
-            payload.scope = await scopeRefGetter.dereference(payload.scope)
+            payload.scope = await scopeRefGetter.dereference(payload.scope);
           }
 
-          return payload
+          return payload;
         },
-      })
+      });
 
     const authVerifier = new AuthVerifier(
       accountManager,
@@ -479,7 +479,7 @@ export class AppContext {
           modService: cfg.modService?.did,
         },
       },
-    )
+    );
 
     return new AppContext({
       actorStore,
@@ -507,54 +507,54 @@ export class AppContext {
       plcRotationKey,
       cfg,
       ...(overrides ?? {}),
-    })
+    });
   }
 
   async appviewAuthHeaders(did: string, lxm: string) {
-    assert(this.bskyAppView)
-    return this.serviceAuthHeaders(did, this.bskyAppView.did, lxm)
+    assert(this.bskyAppView);
+    return this.serviceAuthHeaders(did, this.bskyAppView.did, lxm);
   }
 
   async entrywayAuthHeaders(req: express.Request, did: string, lxm: string) {
-    assert(this.cfg.entryway)
+    assert(this.cfg.entryway);
     const headers = await this.serviceAuthHeaders(
       did,
       this.cfg.entryway.did,
       lxm,
-    )
-    return forwardedFor(req, headers)
+    );
+    return forwardedFor(req, headers);
   }
 
   entrywayPassthruHeaders(req: express.Request) {
-    return forwardedFor(req, authPassthru(req))
+    return forwardedFor(req, authPassthru(req));
   }
 
   async serviceAuthHeaders(did: string, aud: string, lxm: string) {
-    const keypair = await this.actorStore.keypair(did)
+    const keypair = await this.actorStore.keypair(did);
     return createServiceAuthHeaders({
       iss: did,
       aud,
       lxm,
       keypair,
-    })
+    });
   }
 
   async serviceAuthJwt(did: string, aud: string, lxm: string) {
-    const keypair = await this.actorStore.keypair(did)
+    const keypair = await this.actorStore.keypair(did);
     return createServiceJwt({
       iss: did,
       aud,
       lxm,
       keypair,
-    })
+    });
   }
 }
 
 const basicAuthHeader = (username: string, password: string) => {
   const encoded = Buffer.from(`${username}:${password}`, 'utf8').toString(
     'base64',
-  )
-  return `Basic ${encoded}`
-}
+  );
+  return `Basic ${encoded}`;
+};
 
-export default AppContext
+export default AppContext;

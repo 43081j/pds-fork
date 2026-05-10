@@ -1,8 +1,8 @@
-import { Server } from '@atproto/xrpc-server'
-import { isUserOrAdmin } from '../../../../auth-verifier.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { assertRepoAvailability } from './util.js'
+import { Server } from '@atproto/xrpc-server';
+import { isUserOrAdmin } from '../../../../auth-verifier.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { assertRepoAvailability } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.sync.listBlobs, {
@@ -13,12 +13,12 @@ export default function (server: Server, ctx: AppContext) {
       },
     }),
     handler: async ({ params, auth }) => {
-      const { did, since, limit, cursor } = params
-      await assertRepoAvailability(ctx, did, isUserOrAdmin(auth, did))
+      const { did, since, limit, cursor } = params;
+      await assertRepoAvailability(ctx, did, isUserOrAdmin(auth, did));
 
       const blobCids = await ctx.actorStore.read(did, (store) =>
         store.repo.blob.listBlobs({ since, limit, cursor }),
-      )
+      );
 
       return {
         encoding: 'application/json' as const,
@@ -26,7 +26,7 @@ export default function (server: Server, ctx: AppContext) {
           cursor: blobCids.at(-1),
           cids: blobCids,
         },
-      }
+      };
     },
-  })
+  });
 }

@@ -1,13 +1,13 @@
-import { Selectable } from 'kysely'
-import { RefreshToken } from '@atproto/oauth-provider'
+import { Selectable } from 'kysely';
+import { RefreshToken } from '@atproto/oauth-provider';
 
 export interface UsedRefreshToken {
-  tokenId: number
-  refreshToken: RefreshToken
+  tokenId: number;
+  refreshToken: RefreshToken;
 }
 
-export type UsedRefreshTokenEntry = Selectable<UsedRefreshToken>
+export type UsedRefreshTokenEntry = Selectable<UsedRefreshToken>;
 
-export const tableName = 'used_refresh_token'
+export const tableName = 'used_refresh_token';
 
-export type PartialDB = { [tableName]: UsedRefreshToken }
+export type PartialDB = { [tableName]: UsedRefreshToken };

@@ -1,9 +1,9 @@
-import { IncomingMessage } from 'node:http'
-import express from 'express'
-import { InvalidRequestError } from '@atproto/xrpc-server'
+import { IncomingMessage } from 'node:http';
+import express from 'express';
+import { InvalidRequestError } from '@atproto/xrpc-server';
 
 export function authPassthru(req: IncomingMessage) {
-  const { authorization } = req.headers
+  const { authorization } = req.headers;
 
   if (authorization) {
     // DPoP requests are bound to the endpoint being called. Allowing them to be
@@ -15,15 +15,15 @@ export function authPassthru(req: IncomingMessage) {
     // This is fine since app views are usually called using the requester's
     // credentials when "auth.credentials.type === 'access'", which is the only
     // case were DPoP is used.
-    const [type] = authorization.split(' ', 1)
+    const [type] = authorization.split(' ', 1);
     if (!type) {
-      throw new InvalidRequestError('Invalid authorization header')
+      throw new InvalidRequestError('Invalid authorization header');
     }
     if (type.toLowerCase() === 'dpop' || req.headers['dpop']) {
-      throw new InvalidRequestError('DPoP requests cannot be proxied')
+      throw new InvalidRequestError('DPoP requests cannot be proxied');
     }
 
-    return { headers: { authorization } }
+    return { headers: { authorization } };
   }
 }
 
@@ -33,12 +33,12 @@ export const forwardedFor = (
   req: express.Request,
   params: HeadersParam | undefined,
 ) => {
-  const result: HeadersParam = params ?? { headers: {} }
-  const ip = req.ip
+  const result: HeadersParam = params ?? { headers: {} };
+  const ip = req.ip;
   if (ip) {
-    result.headers['x-forwarded-for'] = ip
+    result.headers['x-forwarded-for'] = ip;
   }
-  return result
-}
+  return result;
+};
 
-type HeadersParam = { headers: Record<string, string> }
+type HeadersParam = { headers: Record<string, string> };

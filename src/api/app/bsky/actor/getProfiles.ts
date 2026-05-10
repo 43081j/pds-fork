@@ -1,21 +1,21 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { app } from '../../../../lexicons.js'
-import { computeProxyTo } from '../../../../pipethrough.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { app } from '../../../../lexicons.js';
+import { computeProxyTo } from '../../../../pipethrough.js';
 import {
   MungeFn,
   pipethroughReadAfterWrite,
-} from '../../../../read-after-write/index.js'
+} from '../../../../read-after-write/index.js';
 
 export default function (server: Server, ctx: AppContext) {
-  if (!ctx.bskyAppView) return
+  if (!ctx.bskyAppView) return;
 
   server.add(app.bsky.actor.getProfiles, {
     auth: ctx.authVerifier.authorization({
       authorize: (permissions, { req }) => {
-        const lxm = app.bsky.actor.getProfiles.$lxm
-        const aud = computeProxyTo(ctx, req, lxm)
-        permissions.assertRpc({ aud, lxm })
+        const lxm = app.bsky.actor.getProfiles.$lxm;
+        const aud = computeProxyTo(ctx, req, lxm);
+        permissions.assertRpc({ aud, lxm });
       },
     }),
     opts: {
@@ -29,23 +29,23 @@ export default function (server: Server, ctx: AppContext) {
         reqCtx,
         app.bsky.actor.getProfiles,
         getProfilesMunge,
-      )
+      );
     },
-  })
+  });
 }
 
 const getProfilesMunge: MungeFn<
   app.bsky.actor.getProfiles.$OutputBody
 > = async (localViewer, original, local, requester) => {
-  const localProf = local.profile
-  if (!localProf) return original
+  const localProf = local.profile;
+  if (!localProf) return original;
 
   const profiles = original.profiles.map((prof) => {
-    if (prof.did !== requester) return prof
-    return localViewer.updateProfileDetailed(prof, localProf.record)
-  })
+    if (prof.did !== requester) return prof;
+    return localViewer.updateProfileDetailed(prof, localProf.record);
+  });
   return {
     ...original,
     profiles,
-  }
-}
+  };
+};

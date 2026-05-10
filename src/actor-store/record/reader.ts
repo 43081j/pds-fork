@@ -1,5 +1,5 @@
-import { Cid, LexMap, parseCid } from '@atproto/lex-data'
-import { CidSet, cborToLexRecord, formatDataKey } from '@atproto/repo'
+import { Cid, LexMap, parseCid } from '@atproto/lex-data';
+import { CidSet, cborToLexRecord, formatDataKey } from '@atproto/repo';
 import {
   AtUri,
   AtUriString,
@@ -7,36 +7,36 @@ import {
   NsidString,
   ensureValidAtUri,
   ensureValidDid,
-} from '@atproto/syntax'
-import { countAll, notSoftDeletedClause } from '../../db/util.js'
-import { app, com } from '../../lexicons.js'
-import { LocalRecords } from '../../read-after-write/types.js'
-import { ActorDb, Backlink } from '../db/index.js'
+} from '@atproto/syntax';
+import { countAll, notSoftDeletedClause } from '../../db/util.js';
+import { app, com } from '../../lexicons.js';
+import { LocalRecords } from '../../read-after-write/types.js';
+import { ActorDb, Backlink } from '../db/index.js';
 
 export type RecordDescript = {
-  uri: string
-  path: string
-  cid: Cid
-}
+  uri: string;
+  path: string;
+  cid: Cid;
+};
 
 export class RecordReader {
-  db: ActorDb
+  db: ActorDb;
 
   constructor(db: ActorDb) {
-    this.db = db
+    this.db = db;
   }
 
   async recordCount(): Promise<number> {
     const res = await this.db.db
       .selectFrom('record')
       .select(countAll.as('count'))
-      .executeTakeFirst()
-    return res?.count ?? 0
+      .executeTakeFirst();
+    return res?.count ?? 0;
   }
 
   async listAll(): Promise<RecordDescript[]> {
-    const records: RecordDescript[] = []
-    let cursor: string | undefined = ''
+    const records: RecordDescript[] = [];
+    let cursor: string | undefined = '';
     while (cursor !== undefined) {
       const res = await this.db.db
         .selectFrom('record')
@@ -44,18 +44,18 @@ export class RecordReader {
         .where('uri', '>', cursor)
         .orderBy('uri', 'asc')
         .limit(1000)
-        .execute()
+        .execute();
       for (const row of res) {
-        const parsed = new AtUri(row.uri)
+        const parsed = new AtUri(row.uri);
         records.push({
           uri: row.uri,
           path: formatDataKey(parsed.collection, parsed.rkey),
           cid: parseCid(row.cid),
-        })
+        });
       }
-      cursor = res.at(-1)?.uri
+      cursor = res.at(-1)?.uri;
     }
-    return records
+    return records;
   }
 
   async listCollections(): Promise<NsidString[]> {
@@ -63,19 +63,19 @@ export class RecordReader {
       .selectFrom('record')
       .select('collection')
       .groupBy('collection')
-      .execute()
+      .execute();
 
-    return collections.map((row) => row.collection as NsidString)
+    return collections.map((row) => row.collection as NsidString);
   }
 
   async listRecordsForCollection(opts: {
-    collection: string
-    limit: number
-    reverse: boolean
-    cursor?: string
-    rkeyStart?: string
-    rkeyEnd?: string
-    includeSoftDeleted?: boolean
+    collection: string;
+    limit: number;
+    reverse: boolean;
+    cursor?: string;
+    rkeyStart?: string;
+    rkeyEnd?: string;
+    includeSoftDeleted?: boolean;
   }): Promise<{ uri: AtUriString; cid: string; value: LexMap }[]> {
     const {
       collection,
@@ -85,9 +85,9 @@ export class RecordReader {
       rkeyStart,
       rkeyEnd,
       includeSoftDeleted = false,
-    } = opts
+    } = opts;
 
-    const { ref } = this.db.db.dynamic
+    const { ref } = this.db.db.dynamic;
     let builder = this.db.db
       .selectFrom('record')
       .innerJoin('repo_block', 'repo_block.cid', 'record.cid')
@@ -97,29 +97,29 @@ export class RecordReader {
       )
       .orderBy('record.rkey', reverse ? 'asc' : 'desc')
       .limit(limit)
-      .selectAll()
+      .selectAll();
 
     // prioritize cursor but fall back to soon-to-be-depcreated rkey start/end
     if (cursor !== undefined) {
       if (reverse) {
-        builder = builder.where('record.rkey', '>', cursor)
+        builder = builder.where('record.rkey', '>', cursor);
       } else {
-        builder = builder.where('record.rkey', '<', cursor)
+        builder = builder.where('record.rkey', '<', cursor);
       }
     } else {
       if (rkeyStart !== undefined) {
-        builder = builder.where('record.rkey', '>', rkeyStart)
+        builder = builder.where('record.rkey', '>', rkeyStart);
       }
       if (rkeyEnd !== undefined) {
-        builder = builder.where('record.rkey', '<', rkeyEnd)
+        builder = builder.where('record.rkey', '<', rkeyEnd);
       }
     }
-    const res = await builder.execute()
+    const res = await builder.execute();
     return res.map((row) => ({
       uri: row.uri as AtUriString,
       cid: row.cid,
       value: cborToLexRecord(row.content),
-    }))
+    }));
   }
 
   async getRecord(
@@ -127,13 +127,13 @@ export class RecordReader {
     cid: string | null,
     includeSoftDeleted = false,
   ): Promise<{
-    uri: string
-    cid: string
-    value: LexMap
-    indexedAt: string
-    takedownRef: string | null
+    uri: string;
+    cid: string;
+    value: LexMap;
+    indexedAt: string;
+    takedownRef: string | null;
   } | null> {
-    const { ref } = this.db.db.dynamic
+    const { ref } = this.db.db.dynamic;
     let builder = this.db.db
       .selectFrom('record')
       .innerJoin('repo_block', 'repo_block.cid', 'record.cid')
@@ -141,19 +141,19 @@ export class RecordReader {
       .selectAll()
       .if(!includeSoftDeleted, (qb) =>
         qb.where(notSoftDeletedClause(ref('record'))),
-      )
+      );
     if (cid) {
-      builder = builder.where('record.cid', '=', cid)
+      builder = builder.where('record.cid', '=', cid);
     }
-    const record = await builder.executeTakeFirst()
-    if (!record) return null
+    const record = await builder.executeTakeFirst();
+    if (!record) return null;
     return {
       uri: record.uri,
       cid: record.cid,
       value: cborToLexRecord(record.content),
       indexedAt: record.indexedAt,
       takedownRef: record.takedownRef ? record.takedownRef.toString() : null,
-    }
+    };
   }
 
   async hasRecord(
@@ -161,19 +161,19 @@ export class RecordReader {
     cid: string | null,
     includeSoftDeleted = false,
   ): Promise<boolean> {
-    const { ref } = this.db.db.dynamic
+    const { ref } = this.db.db.dynamic;
     let builder = this.db.db
       .selectFrom('record')
       .select('uri')
       .where('record.uri', '=', uri.toString())
       .if(!includeSoftDeleted, (qb) =>
         qb.where(notSoftDeletedClause(ref('record'))),
-      )
+      );
     if (cid) {
-      builder = builder.where('record.cid', '=', cid)
+      builder = builder.where('record.cid', '=', cid);
     }
-    const record = await builder.executeTakeFirst()
-    return !!record
+    const record = await builder.executeTakeFirst();
+    return !!record;
   }
 
   async getRecordTakedownStatus(
@@ -183,11 +183,11 @@ export class RecordReader {
       .selectFrom('record')
       .select('takedownRef')
       .where('uri', '=', uri.toString())
-      .executeTakeFirst()
-    if (!res) return null
+      .executeTakeFirst();
+    if (!res) return null;
     return res.takedownRef
       ? { applied: true, ref: res.takedownRef }
-      : { applied: false }
+      : { applied: false };
   }
 
   async getCurrentRecordCid(uri: AtUri): Promise<Cid | null> {
@@ -195,16 +195,16 @@ export class RecordReader {
       .selectFrom('record')
       .select('cid')
       .where('uri', '=', uri.toString())
-      .executeTakeFirst()
-    return res ? parseCid(res.cid) : null
+      .executeTakeFirst();
+    return res ? parseCid(res.cid) : null;
   }
 
   async getRecordBacklinks(opts: {
-    collection: string
-    path: string
-    linkTo: string
+    collection: string;
+    path: string;
+    linkTo: string;
   }) {
-    const { collection, path, linkTo } = opts
+    const { collection, path, linkTo } = opts;
     return await this.db.db
       .selectFrom('record')
       .innerJoin('backlink', 'backlink.uri', 'record.uri')
@@ -212,33 +212,33 @@ export class RecordReader {
       .where('backlink.linkTo', '=', linkTo)
       .where('record.collection', '=', collection)
       .selectAll('record')
-      .execute()
+      .execute();
   }
 
   // @NOTE this logic is a placeholder until we allow users to specify these constraints themselves.
   // Ensures that we don't end-up with duplicate likes, reposts, and follows from race conditions.
 
   async getBacklinkConflicts(uri: AtUri, record: LexMap): Promise<AtUri[]> {
-    const conflicts: AtUri[] = []
+    const conflicts: AtUri[] = [];
 
     for (const backlink of getBacklinks(uri, record)) {
       const backlinks = await this.getRecordBacklinks({
         collection: uri.collection,
         path: backlink.path,
         linkTo: backlink.linkTo,
-      })
+      });
 
       for (const { rkey } of backlinks) {
-        conflicts.push(AtUri.make(uri.hostname, uri.collection, rkey))
+        conflicts.push(AtUri.make(uri.hostname, uri.collection, rkey));
       }
     }
 
-    return conflicts
+    return conflicts;
   }
 
   async listExistingBlocks(): Promise<CidSet> {
-    const cids = new CidSet()
-    let cursor: string | undefined = ''
+    const cids = new CidSet();
+    let cursor: string | undefined = '';
     while (cursor !== undefined) {
       const res = await this.db.db
         .selectFrom('repo_block')
@@ -246,13 +246,13 @@ export class RecordReader {
         .where('cid', '>', cursor)
         .orderBy('cid', 'asc')
         .limit(1000)
-        .execute()
+        .execute();
       for (const row of res) {
-        cids.add(parseCid(row.cid))
+        cids.add(parseCid(row.cid));
       }
-      cursor = res.at(-1)?.cid
+      cursor = res.at(-1)?.cid;
     }
-    return cids
+    return cids;
   }
 
   async getProfileRecord() {
@@ -262,15 +262,15 @@ export class RecordReader {
       .where('record.collection', '=', app.bsky.actor.profile.$type)
       .where('record.rkey', '=', 'self')
       .selectAll()
-      .executeTakeFirst()
+      .executeTakeFirst();
 
-    if (!row?.content) return null
+    if (!row?.content) return null;
 
-    return cborToLexRecord(row.content) as app.bsky.actor.profile.Main
+    return cborToLexRecord(row.content) as app.bsky.actor.profile.Main;
   }
 
   async getRecordsSinceRev(rev: string): Promise<LocalRecords> {
-    const result: LocalRecords = { count: 0, profile: null, posts: [] }
+    const result: LocalRecords = { count: 0, profile: null, posts: [] };
 
     const res = await this.db.db
       .selectFrom('record')
@@ -284,7 +284,7 @@ export class RecordReader {
       .where('record.repoRev', '>', rev)
       .limit(10)
       .orderBy('record.repoRev', 'asc')
-      .execute()
+      .execute();
 
     // sanity check to ensure that the clock received is not before _all_ local records (for instance in case of account migration)
     if (res.length > 0) {
@@ -293,17 +293,17 @@ export class RecordReader {
         .selectAll()
         .where('record.repoRev', '<=', rev)
         .limit(1)
-        .executeTakeFirst()
+        .executeTakeFirst();
 
       if (!sanityCheckRes) {
-        return result
+        return result;
       }
     }
 
     for (const cur of res) {
-      result.count++
+      result.count++;
 
-      const uri = new AtUri(cur.uri)
+      const uri = new AtUri(cur.uri);
       if (
         uri.collection === app.bsky.actor.profile.$type &&
         uri.rkey === 'self'
@@ -313,18 +313,18 @@ export class RecordReader {
           cid: parseCid(cur.cid),
           indexedAt: cur.indexedAt as DatetimeString,
           record: cborToLexRecord(cur.content) as app.bsky.actor.profile.Main,
-        }
+        };
       } else if (uri.collection === app.bsky.feed.post.$type) {
         result.posts.push({
           uri,
           cid: parseCid(cur.cid),
           indexedAt: cur.indexedAt as DatetimeString,
           record: cborToLexRecord(cur.content) as app.bsky.feed.post.Main,
-        })
+        });
       }
     }
 
-    return result
+    return result;
   }
 }
 
@@ -336,14 +336,14 @@ export const getBacklinks = (uri: AtUri, record: LexMap): Backlink[] => {
     record?.['$type'] === app.bsky.graph.follow.$type ||
     record?.['$type'] === app.bsky.graph.block.$type
   ) {
-    const subject = record['subject']
+    const subject = record['subject'];
     if (typeof subject !== 'string') {
-      return []
+      return [];
     }
     try {
-      ensureValidDid(subject)
+      ensureValidDid(subject);
     } catch {
-      return []
+      return [];
     }
     return [
       {
@@ -351,20 +351,20 @@ export const getBacklinks = (uri: AtUri, record: LexMap): Backlink[] => {
         path: 'subject',
         linkTo: subject,
       },
-    ]
+    ];
   }
   if (
     record?.['$type'] === app.bsky.feed.like.$type ||
     record?.['$type'] === app.bsky.feed.repost.$type
   ) {
-    const subject = record['subject']
+    const subject = record['subject'];
     if (typeof subject?.['uri'] !== 'string') {
-      return []
+      return [];
     }
     try {
-      ensureValidAtUri(subject['uri'])
+      ensureValidAtUri(subject['uri']);
     } catch {
-      return []
+      return [];
     }
     return [
       {
@@ -372,7 +372,7 @@ export const getBacklinks = (uri: AtUri, record: LexMap): Backlink[] => {
         path: 'subject.uri',
         linkTo: subject['uri'],
       },
-    ]
+    ];
   }
-  return []
-}
+  return [];
+};

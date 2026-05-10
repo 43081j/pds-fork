@@ -1,17 +1,17 @@
-import { parseCid } from '@atproto/lex-data'
+import { parseCid } from '@atproto/lex-data';
 import {
   AuthRequiredError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { dbLogger } from '../../../../logger.js'
+} from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
   BadRecordSwapError,
   prepareDelete,
-} from '../../../../repo/index.js'
+} from '../../../../repo/index.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.repo.deleteRecord, {
@@ -42,16 +42,16 @@ export default function (server: Server, ctx: AppContext) {
       },
     ],
     handler: async ({ input: { body }, auth }) => {
-      const { repo, collection, rkey, swapCommit, swapRecord } = body
+      const { repo, collection, rkey, swapCommit, swapRecord } = body;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
         checkTakedown: true,
-      })
+      });
 
-      const did = account.did
+      const did = account.did;
       if (did !== auth.credentials.did) {
-        throw new AuthRequiredError()
+        throw new AuthRequiredError();
       }
 
       // We can't compute permissions based on the request payload ("input") in
@@ -60,22 +60,22 @@ export default function (server: Server, ctx: AppContext) {
         auth.credentials.permissions.assertRepo({
           action: 'delete',
           collection,
-        })
+        });
       }
 
-      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined
-      const swapRecordCid = swapRecord ? parseCid(swapRecord) : undefined
+      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined;
+      const swapRecordCid = swapRecord ? parseCid(swapRecord) : undefined;
 
       const write = prepareDelete({
         did,
         collection,
         rkey,
         swapCid: swapRecordCid,
-      })
+      });
       const commit = await ctx.actorStore.transact(did, async (actorTxn) => {
-        const record = await actorTxn.record.getRecord(write.uri, null, true)
+        const record = await actorTxn.record.getRecord(write.uri, null, true);
         if (!record) {
-          return null // No-op if record already doesn't exist
+          return null; // No-op if record already doesn't exist
         }
 
         const commit = await actorTxn.repo
@@ -85,15 +85,15 @@ export default function (server: Server, ctx: AppContext) {
               err instanceof BadCommitSwapError ||
               err instanceof BadRecordSwapError
             ) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap')
+              throw new InvalidRequestError(err.message, 'InvalidSwap');
             } else {
-              throw err
+              throw err;
             }
-          })
+          });
 
-        await ctx.sequencer.sequenceCommit(did, commit)
-        return commit
-      })
+        await ctx.sequencer.sequenceCommit(did, commit);
+        return commit;
+      });
 
       if (commit !== null) {
         await ctx.accountManager
@@ -102,8 +102,8 @@ export default function (server: Server, ctx: AppContext) {
             dbLogger.error(
               { err, did, cid: commit.cid, rev: commit.rev },
               'failed to update account root',
-            )
-          })
+            );
+          });
       }
 
       return {
@@ -116,7 +116,7 @@ export default function (server: Server, ctx: AppContext) {
               }
             : undefined,
         },
-      }
+      };
     },
-  })
+  });
 }

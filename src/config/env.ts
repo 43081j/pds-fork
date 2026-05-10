@@ -1,4 +1,4 @@
-import { envBool, envInt, envList, envStr } from '@atproto/common'
+import { envBool, envInt, envList, envStr } from '@atproto/common';
 
 export function readEnv() {
   return {
@@ -158,7 +158,7 @@ export function readEnv() {
 
     // lexicon resolution
     lexiconDidAuthority: envStr('PDS_LEXICON_AUTHORITY_DID'),
-  }
+  };
 }
 
-export type ServerEnvironment = Partial<ReturnType<typeof readEnv>>
+export type ServerEnvironment = Partial<ReturnType<typeof readEnv>>;

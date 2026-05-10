@@ -4,17 +4,17 @@ import {
   TypedBlobRef,
   isLegacyBlobRef,
   parseCid,
-} from '@atproto/lex-data'
-import { AtUri } from '@atproto/syntax'
+} from '@atproto/lex-data';
+import { AtUri } from '@atproto/syntax';
 import {
   AuthRequiredError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { ActorStoreTransactor } from '../../../../actor-store/actor-store-transactor.js'
-import { AppContext } from '../../../../context.js'
-import { app, com } from '../../../../lexicons.js'
-import { dbLogger } from '../../../../logger.js'
+} from '@atproto/xrpc-server';
+import { ActorStoreTransactor } from '../../../../actor-store/actor-store-transactor.js';
+import { AppContext } from '../../../../context.js';
+import { app, com } from '../../../../lexicons.js';
+import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
   BadRecordSwapError,
@@ -23,7 +23,7 @@ import {
   PreparedUpdate,
   prepareCreate,
   prepareUpdate,
-} from '../../../../repo/index.js'
+} from '../../../../repo/index.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.repo.putRecord, {
@@ -62,16 +62,16 @@ export default function (server: Server, ctx: AppContext) {
         validate,
         swapCommit,
         swapRecord,
-      } = input.body
+      } = input.body;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
         checkTakedown: true,
-      })
+      });
 
-      const did = account.did
+      const did = account.did;
       if (did !== auth.credentials.did) {
-        throw new AuthRequiredError()
+        throw new AuthRequiredError();
       }
 
       // We can't compute permissions based on the request payload ("input") in
@@ -80,27 +80,27 @@ export default function (server: Server, ctx: AppContext) {
         auth.credentials.permissions.assertRepo({
           action: 'create',
           collection,
-        })
+        });
         auth.credentials.permissions.assertRepo({
           action: 'update',
           collection,
-        })
+        });
       }
 
-      const uri = AtUri.make(did, collection, rkey)
-      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined
+      const uri = AtUri.make(did, collection, rkey);
+      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined;
       const swapRecordCid =
-        typeof swapRecord === 'string' ? parseCid(swapRecord) : swapRecord
+        typeof swapRecord === 'string' ? parseCid(swapRecord) : swapRecord;
 
       const { commit, write } = await ctx.actorStore.transact(
         did,
         async (actorTxn) => {
-          const current = await actorTxn.record.getRecord(uri, null, true)
-          const isUpdate = current !== null
+          const current = await actorTxn.record.getRecord(uri, null, true);
+          const isUpdate = current !== null;
 
           // @TODO temporaray hack for legacy blob refs in profiles - remove after migrating legacy blobs
           if (isUpdate && collection === app.bsky.actor.profile.$type) {
-            await updateProfileLegacyBlobRef(actorTxn, record)
+            await updateProfileLegacyBlobRef(actorTxn, record);
           }
 
           const writeInfo = {
@@ -110,18 +110,18 @@ export default function (server: Server, ctx: AppContext) {
             record,
             swapCid: swapRecordCid,
             validate,
-          }
+          };
 
-          let write: PreparedCreate | PreparedUpdate
+          let write: PreparedCreate | PreparedUpdate;
           try {
             write = isUpdate
               ? await prepareUpdate(writeInfo)
-              : await prepareCreate(writeInfo)
+              : await prepareCreate(writeInfo);
           } catch (err) {
             if (err instanceof InvalidRecordError) {
-              throw new InvalidRequestError(err.message)
+              throw new InvalidRequestError(err.message);
             }
-            throw err
+            throw err;
           }
 
           // no-op
@@ -129,7 +129,7 @@ export default function (server: Server, ctx: AppContext) {
             return {
               commit: null,
               write,
-            }
+            };
           }
 
           const commit = await actorTxn.repo
@@ -139,17 +139,17 @@ export default function (server: Server, ctx: AppContext) {
                 err instanceof BadCommitSwapError ||
                 err instanceof BadRecordSwapError
               ) {
-                throw new InvalidRequestError(err.message, 'InvalidSwap')
+                throw new InvalidRequestError(err.message, 'InvalidSwap');
               } else {
-                throw err
+                throw err;
               }
-            })
+            });
 
-          await ctx.sequencer.sequenceCommit(did, commit)
+          await ctx.sequencer.sequenceCommit(did, commit);
 
-          return { commit, write }
+          return { commit, write };
         },
-      )
+      );
 
       if (commit !== null) {
         await ctx.accountManager
@@ -158,8 +158,8 @@ export default function (server: Server, ctx: AppContext) {
             dbLogger.error(
               { err, did, cid: commit.cid, rev: commit.rev },
               'failed to update account root',
-            )
-          })
+            );
+          });
       }
 
       return {
@@ -175,9 +175,9 @@ export default function (server: Server, ctx: AppContext) {
             : undefined,
           validationStatus: write.validationStatus,
         },
-      }
+      };
     },
-  })
+  });
 }
 
 // WARNING: mutates object
@@ -186,10 +186,10 @@ async function updateProfileLegacyBlobRef(
   record: LexMap,
 ): Promise<void> {
   if (isLegacyBlobRef(record.avatar)) {
-    record.avatar = await upgradeLegacyBlob(actorStore, record.avatar)
+    record.avatar = await upgradeLegacyBlob(actorStore, record.avatar);
   }
   if (isLegacyBlobRef(record.banner)) {
-    record.banner = await upgradeLegacyBlob(actorStore, record.banner)
+    record.banner = await upgradeLegacyBlob(actorStore, record.banner);
   }
 }
 
@@ -197,12 +197,12 @@ async function upgradeLegacyBlob(
   actorStore: ActorStoreTransactor,
   legacyBlob: LegacyBlobRef,
 ): Promise<TypedBlobRef> {
-  const ref = parseCid(legacyBlob.cid)
-  const blob = await actorStore.repo.blob.getBlobMetadata(ref)
+  const ref = parseCid(legacyBlob.cid);
+  const blob = await actorStore.repo.blob.getBlobMetadata(ref);
   return {
     $type: 'blob',
     mimeType: legacyBlob.mimeType,
     ref,
     size: blob.size,
-  }
+  };
 }

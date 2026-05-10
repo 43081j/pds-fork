@@ -1,6 +1,6 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.repo.listMissingBlobs, {
@@ -10,12 +10,12 @@ export default function (server: Server, ctx: AppContext) {
       },
     }),
     handler: async ({ auth, params }) => {
-      const { did } = auth.credentials
-      const { limit, cursor } = params
+      const { did } = auth.credentials;
+      const { limit, cursor } = params;
 
       const blobs = await ctx.actorStore.read(did, (store) =>
         store.repo.blob.listMissingBlobs({ limit, cursor }),
-      )
+      );
 
       return {
         encoding: 'application/json' as const,
@@ -23,7 +23,7 @@ export default function (server: Server, ctx: AppContext) {
           blobs,
           cursor: blobs.at(-1)?.cid,
         },
-      }
+      };
     },
-  })
+  });
 }

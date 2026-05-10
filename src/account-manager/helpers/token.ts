@@ -1,14 +1,14 @@
-import { Selectable } from 'kysely'
+import { Selectable } from 'kysely';
 import {
   Code,
   NewTokenData,
   RefreshToken,
   TokenData,
   TokenId,
-} from '@atproto/oauth-provider'
-import { fromDateISO, fromJson, toDateISO, toJson } from '../../db/index.js'
-import { AccountDb, Token } from '../db/index.js'
-import { selectAccountQB } from './account.js'
+} from '@atproto/oauth-provider';
+import { fromDateISO, fromJson, toDateISO, toJson } from '../../db/index.js';
+import { AccountDb, Token } from '../db/index.js';
+import { selectAccountQB } from './account.js';
 
 export function toTokenData(row: Selectable<Token>): TokenData {
   return {
@@ -22,7 +22,7 @@ export function toTokenData(row: Selectable<Token>): TokenData {
     parameters: fromJson(row.parameters),
     code: row.code,
     scope: row.scope,
-  }
+  };
 }
 
 const selectTokenInfoQB = (db: AccountDb) =>
@@ -44,7 +44,7 @@ const selectTokenInfoQB = (db: AccountDb) =>
       'token.code',
       'token.currentRefreshToken',
       'token.scope',
-    ])
+    ]);
 
 export const createQB = (
   db: AccountDb,
@@ -66,24 +66,24 @@ export const createQB = (
     code: data.code,
     currentRefreshToken: refreshToken || null,
     scope: data.scope,
-  })
-}
+  });
+};
 
 export const forRotateQB = (db: AccountDb, id: TokenId) =>
   db.db
     .selectFrom('token')
     .where('tokenId', '=', id)
     .where('currentRefreshToken', 'is not', null)
-    .select(['id', 'currentRefreshToken'])
+    .select(['id', 'currentRefreshToken']);
 
 export const findByQB = (
   db: AccountDb,
   search: {
-    id?: number
-    did?: string
-    code?: Code
-    tokenId?: TokenId
-    currentRefreshToken?: RefreshToken
+    id?: number;
+    did?: string;
+    code?: Code;
+    tokenId?: TokenId;
+    currentRefreshToken?: RefreshToken;
   },
 ) => {
   if (
@@ -94,7 +94,7 @@ export const findByQB = (
     search.currentRefreshToken === undefined
   ) {
     // Prevent accidental scan
-    throw new TypeError('At least one search parameter is required')
+    throw new TypeError('At least one search parameter is required');
   }
 
   return selectTokenInfoQB(db)
@@ -119,12 +119,12 @@ export const findByQB = (
     .if(search.currentRefreshToken !== undefined, (qb) =>
       // uses "token_refresh_token_unique_idx"
       qb.where('token.currentRefreshToken', '=', search.currentRefreshToken!),
-    )
-}
+    );
+};
 
 export const removeByDidQB = (db: AccountDb, did: string) =>
   // uses "token_did_idx" index
-  db.db.deleteFrom('token').where('did', '=', did)
+  db.db.deleteFrom('token').where('did', '=', did);
 
 export const rotateQB = (
   db: AccountDb,
@@ -145,8 +145,8 @@ export const rotateQB = (
       scope: newData.scope,
     })
     // uses primary key index
-    .where('id', '=', id)
+    .where('id', '=', id);
 
 export const removeQB = (db: AccountDb, tokenId: TokenId) =>
   // uses "used_refresh_token_fk" to cascade delete
-  db.db.deleteFrom('token').where('tokenId', '=', tokenId)
+  db.db.deleteFrom('token').where('tokenId', '=', tokenId);

@@ -1,21 +1,21 @@
-import { Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { app } from '../../../../lexicons.js'
-import { computeProxyTo } from '../../../../pipethrough.js'
+import { Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { app } from '../../../../lexicons.js';
+import { computeProxyTo } from '../../../../pipethrough.js';
 import {
   MungeFn,
   pipethroughReadAfterWrite,
-} from '../../../../read-after-write/index.js'
+} from '../../../../read-after-write/index.js';
 
 export default function (server: Server, ctx: AppContext) {
-  if (!ctx.bskyAppView) return
+  if (!ctx.bskyAppView) return;
 
   server.add(app.bsky.feed.getTimeline, {
     auth: ctx.authVerifier.authorization({
       authorize: (permissions, { req }) => {
-        const lxm = app.bsky.feed.getTimeline.$lxm
-        const aud = computeProxyTo(ctx, req, lxm)
-        permissions.assertRpc({ aud, lxm })
+        const lxm = app.bsky.feed.getTimeline.$lxm;
+        const aud = computeProxyTo(ctx, req, lxm);
+        permissions.assertRpc({ aud, lxm });
       },
     }),
     opts: {
@@ -29,9 +29,9 @@ export default function (server: Server, ctx: AppContext) {
         reqCtx,
         app.bsky.feed.getTimeline,
         getTimelineMunge,
-      )
+      );
     },
-  })
+  });
 }
 
 const getTimelineMunge: MungeFn<app.bsky.feed.getTimeline.$OutputBody> = async (
@@ -42,9 +42,9 @@ const getTimelineMunge: MungeFn<app.bsky.feed.getTimeline.$OutputBody> = async (
   const feed = await localViewer.formatAndInsertPostsInFeed(
     [...original.feed],
     local.posts,
-  )
+  );
   return {
     ...original,
     feed,
-  }
-}
+  };
+};

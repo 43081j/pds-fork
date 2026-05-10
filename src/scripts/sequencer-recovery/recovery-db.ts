@@ -1,32 +1,35 @@
-import path from 'node:path'
-import { Kysely } from 'kysely'
-import { DidString } from '@atproto/syntax'
-import { Database, Migrator } from '../../db/index.js'
+import path from 'node:path';
+import { Kysely } from 'kysely';
+import { DidString } from '@atproto/syntax';
+import { Database, Migrator } from '../../db/index.js';
 
 export interface NewAccount {
-  did: DidString
-  published: 0 | 1
+  did: DidString;
+  published: 0 | 1;
 }
 
 export interface Failed {
-  did: DidString
-  error: string | null
-  fixed: 0 | 1
+  did: DidString;
+  error: string | null;
+  fixed: 0 | 1;
 }
 
 export type RecoveryDbSchema = {
-  new_account: NewAccount
-  failed: Failed
-}
+  new_account: NewAccount;
+  failed: Failed;
+};
 
-export type RecoveryDb = Database<RecoveryDbSchema>
+export type RecoveryDb = Database<RecoveryDbSchema>;
 
 export const getRecoveryDbFromSequencerLoc = (
   sequencerLoc: string,
 ): Promise<RecoveryDb> => {
-  const recoveryDbLoc = path.join(path.dirname(sequencerLoc), 'recovery.sqlite')
-  return getAndMigrateRecoveryDb(recoveryDbLoc)
-}
+  const recoveryDbLoc = path.join(
+    path.dirname(sequencerLoc),
+    'recovery.sqlite',
+  );
+  return getAndMigrateRecoveryDb(recoveryDbLoc);
+};
 
 export const getAndMigrateRecoveryDb = async (
   location: string,
@@ -34,12 +37,12 @@ export const getAndMigrateRecoveryDb = async (
 ): Promise<RecoveryDb> => {
   const pragmas: Record<string, string> = disableWalAutoCheckpoint
     ? { wal_autocheckpoint: '0' }
-    : {}
-  const db = Database.sqlite<RecoveryDbSchema>(location, pragmas)
-  const migrator = new Migrator(db.db, migrations)
-  await migrator.migrateToLatestOrThrow()
-  return db
-}
+    : {};
+  const db = Database.sqlite<RecoveryDbSchema>(location, pragmas);
+  const migrator = new Migrator(db.db, migrations);
+  await migrator.migrateToLatestOrThrow();
+  return db;
+};
 
 const migrations = {
   '001': {
@@ -48,18 +51,18 @@ const migrations = {
         .createTable('new_account')
         .addColumn('did', 'varchar', (col) => col.primaryKey())
         .addColumn('published', 'int2', (col) => col.notNull())
-        .execute()
+        .execute();
 
       await db.schema
         .createTable('failed')
         .addColumn('did', 'varchar', (col) => col.primaryKey())
         .addColumn('error', 'varchar')
         .addColumn('fixed', 'int2', (col) => col.notNull())
-        .execute()
+        .execute();
     },
     down: async (db: Kysely<unknown>) => {
-      await db.schema.dropTable('new_account').execute()
-      await db.schema.dropTable('failed').execute()
+      await db.schema.dropTable('new_account').execute();
+      await db.schema.dropTable('failed').execute();
     },
   },
-}
+};

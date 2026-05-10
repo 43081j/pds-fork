@@ -1,23 +1,23 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.confirmEmail, {
     auth: ctx.authVerifier.authorization({
       checkTakedown: true,
       authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'email', action: 'manage' })
+        permissions.assertAccount({ attr: 'email', action: 'manage' });
       },
     }),
     handler: async ({ auth, input: { body }, req }) => {
-      const { did } = auth.credentials
+      const { did } = auth.credentials;
 
       const user = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
-      })
+      });
       if (!user) {
-        throw new InvalidRequestError('user not found', 'AccountNotFound')
+        throw new InvalidRequestError('user not found', 'AccountNotFound');
       }
 
       if (ctx.entrywayClient) {
@@ -25,20 +25,20 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.confirmEmail.$lxm,
-        )
+        );
         await ctx.entrywayClient.xrpc(com.atproto.server.confirmEmail, {
           headers,
           body,
-        })
-        return
+        });
+        return;
       }
 
-      const { token, email } = body
+      const { token, email } = body;
 
       if (user.email !== email.toLowerCase()) {
-        throw new InvalidRequestError('invalid email', 'InvalidEmail')
+        throw new InvalidRequestError('invalid email', 'InvalidEmail');
       }
-      await ctx.accountManager.confirmEmail({ did, token })
+      await ctx.accountManager.confirmEmail({ did, token });
     },
-  })
+  });
 }

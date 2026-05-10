@@ -1,52 +1,52 @@
-import { ScopePermissions } from '@atproto/oauth-scopes'
-import { DidString } from '@atproto/syntax'
-import { AuthScope } from './auth-scope.js'
+import { ScopePermissions } from '@atproto/oauth-scopes';
+import { DidString } from '@atproto/syntax';
+import { AuthScope } from './auth-scope.js';
 
 export type UnauthenticatedOutput = {
-  credentials: null
-}
+  credentials: null;
+};
 
 export type AdminTokenOutput = {
   credentials: {
-    type: 'admin_token'
-  }
-}
+    type: 'admin_token';
+  };
+};
 
 export type ModServiceOutput = {
   credentials: {
-    type: 'mod_service'
-    did: DidString
-  }
-}
+    type: 'mod_service';
+    did: DidString;
+  };
+};
 
 export type AccessOutput<S extends AuthScope = AuthScope> = {
   credentials: {
-    type: 'access'
-    did: DidString
-    scope: S
-  }
-}
+    type: 'access';
+    did: DidString;
+    scope: S;
+  };
+};
 
 export type OAuthOutput = {
   credentials: {
-    type: 'oauth'
-    did: DidString
-    permissions: ScopePermissions
-  }
-}
+    type: 'oauth';
+    did: DidString;
+    permissions: ScopePermissions;
+  };
+};
 
 export type RefreshOutput = {
   credentials: {
-    type: 'refresh'
-    did: DidString
-    scope: 'com.atproto.refresh'
-    tokenId: string
-  }
-}
+    type: 'refresh';
+    did: DidString;
+    scope: 'com.atproto.refresh';
+    tokenId: string;
+  };
+};
 
 export type UserServiceAuthOutput = {
   credentials: {
-    type: 'user_service_auth'
-    did: DidString
-  }
-}
+    type: 'user_service_auth';
+    did: DidString;
+  };
+};

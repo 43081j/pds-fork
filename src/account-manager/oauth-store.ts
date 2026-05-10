@@ -1,14 +1,14 @@
-import assert from 'node:assert'
-import { Client, createOp as createPlcOp } from '@did-plc/lib'
-import { Selectable } from 'kysely'
-import { Keypair, Secp256k1Keypair } from '@atproto/crypto'
+import assert from 'node:assert';
+import { Client, createOp as createPlcOp } from '@did-plc/lib';
+import { Selectable } from 'kysely';
+import { Keypair, Secp256k1Keypair } from '@atproto/crypto';
 import {
   HandleString,
   asAtIdentifierString,
   getBlobCidString,
   isDidString,
   isHandleString,
-} from '@atproto/lex'
+} from '@atproto/lex';
 import {
   Account,
   AccountStore,
@@ -42,28 +42,28 @@ import {
   TokenInfo,
   TokenStore,
   UpdateRequestData,
-} from '@atproto/oauth-provider'
+} from '@atproto/oauth-provider';
 import {
   AuthRequiredError as XrpcAuthRequiredError,
   InvalidRequestError as XrpcInvalidRequestError,
-} from '@atproto/xrpc-server'
-import { ActorStore } from '../actor-store/actor-store.js'
-import { BackgroundQueue } from '../background.js'
-import { fromDateISO } from '../db/index.js'
-import { ImageUrlBuilder } from '../image/image-url-builder.js'
-import { dbLogger } from '../logger.js'
-import { ServerMailer } from '../mailer/index.js'
-import { Sequencer, syncEvtDataFromCommit } from '../sequencer/index.js'
-import { AccountManager, InvalidPasswordError } from './account-manager.js'
-import * as schemas from './db/schema/index.js'
-import * as accountHelper from './helpers/account.js'
-import * as accountDeviceHelper from './helpers/account-device.js'
-import * as authRequestHelper from './helpers/authorization-request.js'
-import * as authorizedClientHelper from './helpers/authorized-client.js'
-import * as deviceHelper from './helpers/device.js'
-import * as lexiconHelper from './helpers/lexicon.js'
-import * as tokenHelper from './helpers/token.js'
-import * as usedRefreshTokenHelper from './helpers/used-refresh-token.js'
+} from '@atproto/xrpc-server';
+import { ActorStore } from '../actor-store/actor-store.js';
+import { BackgroundQueue } from '../background.js';
+import { fromDateISO } from '../db/index.js';
+import { ImageUrlBuilder } from '../image/image-url-builder.js';
+import { dbLogger } from '../logger.js';
+import { ServerMailer } from '../mailer/index.js';
+import { Sequencer, syncEvtDataFromCommit } from '../sequencer/index.js';
+import { AccountManager, InvalidPasswordError } from './account-manager.js';
+import * as schemas from './db/schema/index.js';
+import * as accountHelper from './helpers/account.js';
+import * as accountDeviceHelper from './helpers/account-device.js';
+import * as authRequestHelper from './helpers/authorization-request.js';
+import * as authorizedClientHelper from './helpers/authorized-client.js';
+import * as deviceHelper from './helpers/device.js';
+import * as lexiconHelper from './helpers/lexicon.js';
+import * as tokenHelper from './helpers/token.js';
+import * as usedRefreshTokenHelper from './helpers/used-refresh-token.js';
 
 /**
  * This class' purpose is to implement the interface needed by the OAuthProvider
@@ -74,16 +74,16 @@ import * as usedRefreshTokenHelper from './helpers/used-refresh-token.js'
 export class OAuthStore
   implements AccountStore, RequestStore, DeviceStore, LexiconStore, TokenStore
 {
-  private readonly accountManager: AccountManager
-  private readonly actorStore: ActorStore
-  private readonly imageUrlBuilder: ImageUrlBuilder
-  private readonly backgroundQueue: BackgroundQueue
-  private readonly mailer: ServerMailer
-  private readonly sequencer: Sequencer
-  private readonly plcClient: Client
-  private readonly plcRotationKey: Keypair
-  private readonly publicUrl: string
-  private readonly recoveryDidKey: string | null
+  private readonly accountManager: AccountManager;
+  private readonly actorStore: ActorStore;
+  private readonly imageUrlBuilder: ImageUrlBuilder;
+  private readonly backgroundQueue: BackgroundQueue;
+  private readonly mailer: ServerMailer;
+  private readonly sequencer: Sequencer;
+  private readonly plcClient: Client;
+  private readonly plcRotationKey: Keypair;
+  private readonly publicUrl: string;
+  private readonly recoveryDidKey: string | null;
 
   constructor(
     accountManager: AccountManager,
@@ -97,26 +97,26 @@ export class OAuthStore
     publicUrl: string,
     recoveryDidKey: string | null,
   ) {
-    this.accountManager = accountManager
-    this.actorStore = actorStore
-    this.imageUrlBuilder = imageUrlBuilder
-    this.backgroundQueue = backgroundQueue
-    this.mailer = mailer
-    this.sequencer = sequencer
-    this.plcClient = plcClient
-    this.plcRotationKey = plcRotationKey
-    this.publicUrl = publicUrl
-    this.recoveryDidKey = recoveryDidKey
+    this.accountManager = accountManager;
+    this.actorStore = actorStore;
+    this.imageUrlBuilder = imageUrlBuilder;
+    this.backgroundQueue = backgroundQueue;
+    this.mailer = mailer;
+    this.sequencer = sequencer;
+    this.plcClient = plcClient;
+    this.plcRotationKey = plcRotationKey;
+    this.publicUrl = publicUrl;
+    this.recoveryDidKey = recoveryDidKey;
   }
 
   private get db() {
-    const { db } = this.accountManager
-    if (db.destroyed) throw new Error('Database connection is closed')
-    return db
+    const { db } = this.accountManager;
+    if (db.destroyed) throw new Error('Database connection is closed');
+    return db;
   }
 
   private get serviceDid() {
-    return this.accountManager.serviceDid
+    return this.accountManager.serviceDid;
   }
 
   private async verifyEmailAvailability(email: string): Promise<void> {
@@ -125,20 +125,20 @@ export class OAuthStore
     const account = await this.accountManager.getAccountByEmail(email, {
       includeDeactivated: true,
       includeTakenDown: true,
-    })
+    });
 
     if (account) {
-      throw new InvalidRequestError(`Email already taken`)
+      throw new InvalidRequestError(`Email already taken`);
     }
   }
 
   private async verifyInviteCode(code: string) {
     try {
-      await this.accountManager.ensureInviteIsAvailable(code)
+      await this.accountManager.ensureInviteIsAvailable(code);
     } catch (err) {
       const message =
-        err instanceof XrpcInvalidRequestError ? err.message : undefined
-      throw new InvalidInviteCodeError(message, err)
+        err instanceof XrpcInvalidRequestError ? err.message : undefined;
+      throw new InvalidInviteCodeError(message, err);
     }
   }
 
@@ -154,19 +154,19 @@ export class OAuthStore
     // @TODO Send an account creation confirmation email (+verification link) to the user (in their locale)
     // @NOTE Password strength & length already enforced by the OAuthProvider
 
-    assert(isHandleString(handle), 'Handle must be a valid HandleString')
+    assert(isHandleString(handle), 'Handle must be a valid HandleString');
 
     await Promise.all([
       this.verifyEmailAvailability(email),
       this.verifyHandleAvailability(handle),
       !inviteCode || this.verifyInviteCode(inviteCode),
-    ])
+    ]);
 
     // @TODO The code bellow should probably be refactored to be common with the
     // code of the `com.atproto.server.createAccount` XRPC endpoint.
 
-    const signingKey = await Secp256k1Keypair.create({ exportable: true })
-    const signingKeyDid = signingKey.did()
+    const signingKey = await Secp256k1Keypair.create({ exportable: true });
+    const signingKeyDid = signingKey.did();
 
     const plcCreate = await createPlcOp({
       signingKey: signingKeyDid,
@@ -176,19 +176,19 @@ export class OAuthStore
       handle,
       pds: this.publicUrl,
       signer: this.plcRotationKey,
-    })
+    });
 
-    const { did, op } = plcCreate
-    assert(isDidString(did), 'Generated DID is not a valid DidString')
+    const { did, op } = plcCreate;
+    assert(isDidString(did), 'Generated DID is not a valid DidString');
 
     try {
-      await this.actorStore.create(did, signingKey)
+      await this.actorStore.create(did, signingKey);
       try {
         const commit = await this.actorStore.transact(did, (actorTxn) =>
           actorTxn.repo.createRepo([]),
-        )
+        );
 
-        await this.plcClient.sendOperation(did, op)
+        await this.plcClient.sendOperation(did, op);
 
         await this.accountManager.createAccount({
           did,
@@ -198,36 +198,36 @@ export class OAuthStore
           inviteCode,
           repoCid: commit.cid,
           repoRev: commit.rev,
-        })
+        });
         try {
-          await this.sequencer.sequenceIdentityEvt(did, handle)
-          await this.sequencer.sequenceAccountEvt(did, 'active')
-          await this.sequencer.sequenceCommit(did, commit)
+          await this.sequencer.sequenceIdentityEvt(did, handle);
+          await this.sequencer.sequenceAccountEvt(did, 'active');
+          await this.sequencer.sequenceCommit(did, commit);
           await this.sequencer.sequenceSyncEvt(
             did,
             syncEvtDataFromCommit(commit),
-          )
-          await this.accountManager.updateRepoRoot(did, commit.cid, commit.rev)
-          await this.actorStore.clearReservedKeypair(signingKeyDid, did)
+          );
+          await this.accountManager.updateRepoRoot(did, commit.cid, commit.rev);
+          await this.actorStore.clearReservedKeypair(signingKeyDid, did);
 
-          const account = await this.accountManager.getAccount(did)
-          if (!account) throw new Error('Account not found')
+          const account = await this.accountManager.getAccount(did);
+          if (!account) throw new Error('Account not found');
 
-          return await this.buildAccount(account)
+          return await this.buildAccount(account);
         } catch (err) {
-          this.accountManager.deleteAccount(did)
-          throw err
+          this.accountManager.deleteAccount(did);
+          throw err;
         }
       } catch (err) {
-        await this.actorStore.destroy(did)
-        throw err
+        await this.actorStore.destroy(did);
+        throw err;
       }
     } catch (err) {
       // XrpcError => OAuthError
       if (err instanceof XrpcInvalidRequestError) {
-        throw new InvalidRequestError(err.message, err)
+        throw new InvalidRequestError(err.message, err);
       }
-      throw err
+      throw err;
     }
   }
 
@@ -242,33 +242,33 @@ export class OAuthStore
     try {
       // Should never happen
       if (emailOtp != null) {
-        throw new Error('Email OTP is not supported')
+        throw new Error('Email OTP is not supported');
       }
 
       const { user, appPassword, isSoftDeleted } =
-        await this.accountManager.login({ identifier, password })
+        await this.accountManager.login({ identifier, password });
 
       if (isSoftDeleted) {
-        throw new InvalidRequestError('Account was taken down')
+        throw new InvalidRequestError('Account was taken down');
       }
 
       if (appPassword) {
-        throw new InvalidRequestError('App passwords are not allowed')
+        throw new InvalidRequestError('App passwords are not allowed');
       }
 
-      return this.buildAccount(user)
+      return this.buildAccount(user);
     } catch (err) {
       // `InvalidPasswordError` is a subclass of `XrpcAuthRequiredError`,
       // so it must be checked first. Surfacing the matched `did` as the
       // `sub` lets the oauth-provider's `onSignInFailed` hook distinguish
       // "identifier known, credentials wrong" from "identifier unknown".
       if (err instanceof InvalidPasswordError) {
-        throw new InvalidCredentialsError(err.message, err.did, err)
+        throw new InvalidCredentialsError(err.message, err.did, err);
       }
       if (err instanceof XrpcAuthRequiredError) {
-        throw new InvalidCredentialsError(err.message, undefined, err)
+        throw new InvalidCredentialsError(err.message, undefined, err);
       }
-      throw err
+      throw err;
     }
   }
 
@@ -277,35 +277,35 @@ export class OAuthStore
     clientId: ClientId,
     data: AuthorizedClientData,
   ): Promise<void> {
-    await authorizedClientHelper.upsert(this.db, sub, clientId, data)
+    await authorizedClientHelper.upsert(this.db, sub, clientId, data);
   }
 
   async getAccount(sub: Sub): Promise<{
-    account: Account
-    authorizedClients: AuthorizedClients
+    account: Account;
+    authorizedClients: AuthorizedClients;
   }> {
     const accountRow = await accountHelper.getAccount(
       this.db,
       // @TODO @atproto/oauth-provider should strongly type `Sub` as `DidString`
       asAtIdentifierString(sub),
       { includeDeactivated: true },
-    )
+    );
 
-    assert(accountRow, 'Account not found')
+    assert(accountRow, 'Account not found');
 
-    const account = await this.buildAccount(accountRow)
+    const account = await this.buildAccount(accountRow);
     const authorizedClients = await authorizedClientHelper.getAuthorizedClients(
       this.db,
       sub,
-    )
+    );
 
-    return { account, authorizedClients }
+    return { account, authorizedClients };
   }
 
   async upsertDeviceAccount(deviceId: DeviceId, sub: string): Promise<void> {
     await this.db.executeWithRetry(
       accountDeviceHelper.upsertQB(this.db, deviceId, sub),
-    )
+    );
   }
 
   async getDeviceAccount(
@@ -314,9 +314,9 @@ export class OAuthStore
   ): Promise<DeviceAccount | null> {
     const row = await accountDeviceHelper
       .selectQB(this.db, { deviceId, sub })
-      .executeTakeFirst()
+      .executeTakeFirst();
 
-    if (!row) return null
+    if (!row) return null;
 
     return {
       deviceId,
@@ -328,37 +328,37 @@ export class OAuthStore
       ),
       createdAt: fromDateISO(row.adCreatedAt),
       updatedAt: fromDateISO(row.adUpdatedAt),
-    }
+    };
   }
 
   async removeDeviceAccount(deviceId: DeviceId, sub: Sub): Promise<void> {
     await this.db.executeWithRetry(
       accountDeviceHelper.removeQB(this.db, deviceId, sub),
-    )
+    );
   }
 
   async listDeviceAccounts(
     filter: { sub: Sub } | { deviceId: DeviceId },
   ): Promise<DeviceAccount[]> {
-    const rows = await accountDeviceHelper.selectQB(this.db, filter).execute()
+    const rows = await accountDeviceHelper.selectQB(this.db, filter).execute();
 
-    const uniqueDids = [...new Set(rows.map((row) => row.did))]
+    const uniqueDids = [...new Set(rows.map((row) => row.did))];
 
     // Enrich all distinct account with their profile data
     const accounts = new Map(
       await Promise.all(
         Array.from(uniqueDids, async (did): Promise<[Sub, Account]> => {
-          const row = rows.find((r) => r.did === did)!
-          return [did, await this.buildAccount(row)]
+          const row = rows.find((r) => r.did === did)!;
+          return [did, await this.buildAccount(row)];
         }),
       ),
-    )
+    );
 
     const authorizedClientsMap =
       await authorizedClientHelper.getAuthorizedClientsMulti(
         this.db,
         uniqueDids,
-      )
+      );
 
     return rows.map((row) => ({
       deviceId: row.deviceId,
@@ -367,7 +367,7 @@ export class OAuthStore
       authorizedClients: authorizedClientsMap.get(row.did)!,
       createdAt: fromDateISO(row.adCreatedAt),
       updatedAt: fromDateISO(row.adUpdatedAt),
-    }))
+    }));
   }
 
   async resetPasswordRequest({
@@ -377,42 +377,42 @@ export class OAuthStore
     const account = await this.accountManager.getAccountByEmail(email, {
       includeDeactivated: true,
       includeTakenDown: true,
-    })
+    });
 
-    if (!account?.email || !account?.handle) return null
+    if (!account?.email || !account?.handle) return null;
 
-    const { handle } = account
+    const { handle } = account;
     const token = await this.accountManager.createEmailToken(
       account.did,
       'reset_password',
-    )
+    );
 
     // @TODO Use the locale to send the email in the right language
     await this.mailer.sendResetPassword(
       { handle, token },
       { to: account.email },
-    )
+    );
 
-    return this.buildAccount(account)
+    return this.buildAccount(account);
   }
 
   async resetPasswordConfirm(
     data: ResetPasswordConfirmInput,
   ): Promise<Account | null> {
     try {
-      const did = await this.accountManager.resetPassword(data)
+      const did = await this.accountManager.resetPassword(data);
       const account = await this.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
-      })
+      });
 
-      return account ? this.buildAccount(account) : null
+      return account ? this.buildAccount(account) : null;
     } catch (err) {
       if (err instanceof XrpcInvalidRequestError) {
-        return null
+        return null;
       }
 
-      throw err
+      throw err;
     }
   }
 
@@ -420,31 +420,31 @@ export class OAuthStore
     // @NOTE Handle validity & normalization already enforced by the OAuthProvider
     try {
       const normalized =
-        await this.accountManager.normalizeAndValidateHandle(handle)
+        await this.accountManager.normalizeAndValidateHandle(handle);
 
       // Should never happen (OAuthProvider should have already validated the
       // handle) This check is just a safeguard against future normalization
       // changes.
       if (normalized !== handle) {
-        throw new HandleUnavailableError('syntax', 'Invalid handle')
+        throw new HandleUnavailableError('syntax', 'Invalid handle');
       }
 
       const account = await this.accountManager.getAccount(normalized, {
         includeDeactivated: true,
         includeTakenDown: true,
-      })
+      });
 
       if (account) {
-        throw new HandleUnavailableError('taken')
+        throw new HandleUnavailableError('taken');
       }
     } catch (err) {
       if (err instanceof XrpcInvalidRequestError) {
         throw err.customErrorName === 'HandleNotAvailable'
           ? new HandleUnavailableError('taken', err.message)
-          : new HandleUnavailableError('syntax', err.message)
+          : new HandleUnavailableError('syntax', err.message);
       }
 
-      throw err
+      throw err;
     }
   }
 
@@ -453,14 +453,16 @@ export class OAuthStore
   async createRequest(id: RequestId, data: RequestData): Promise<void> {
     await this.db.executeWithRetry(
       authRequestHelper.createQB(this.db, id, data),
-    )
+    );
   }
 
   async readRequest(id: RequestId): Promise<RequestData | null> {
     try {
-      const row = await authRequestHelper.readQB(this.db, id).executeTakeFirst()
-      if (!row) return null
-      return authRequestHelper.rowToRequestData(row)
+      const row = await authRequestHelper
+        .readQB(this.db, id)
+        .executeTakeFirst();
+      if (!row) return null;
+      return authRequestHelper.rowToRequestData(row);
     } finally {
       // Take the opportunity to clean up expired requests. Do this after we got
       // the current (potentially expired) request data to allow the provider to
@@ -468,26 +470,26 @@ export class OAuthStore
       this.backgroundQueue.add(async () => {
         await this.db.executeWithRetry(
           authRequestHelper.removeOldExpiredQB(this.db),
-        )
-      })
+        );
+      });
     }
   }
 
   async updateRequest(id: RequestId, data: UpdateRequestData): Promise<void> {
     await this.db.executeWithRetry(
       authRequestHelper.updateQB(this.db, id, data),
-    )
+    );
   }
 
   async deleteRequest(id: RequestId): Promise<void> {
-    await this.db.executeWithRetry(authRequestHelper.removeByIdQB(this.db, id))
+    await this.db.executeWithRetry(authRequestHelper.removeByIdQB(this.db, id));
   }
 
   async consumeRequestCode(code: Code): Promise<FoundRequestResult | null> {
     const row = await authRequestHelper
       .consumeByCodeQB(this.db, code)
-      .executeTakeFirst()
-    return row ? authRequestHelper.rowToFoundRequestResult(row) : null
+      .executeTakeFirst();
+    return row ? authRequestHelper.rowToFoundRequestResult(row) : null;
   }
 
   // DeviceStore
@@ -495,12 +497,12 @@ export class OAuthStore
   async createDevice(deviceId: DeviceId, data: DeviceData): Promise<void> {
     await this.db.executeWithRetry(
       deviceHelper.createQB(this.db, deviceId, data),
-    )
+    );
   }
 
   async readDevice(deviceId: DeviceId): Promise<null | DeviceData> {
-    const row = await deviceHelper.readQB(this.db, deviceId).executeTakeFirst()
-    return row ? deviceHelper.rowToDeviceData(row) : null
+    const row = await deviceHelper.readQB(this.db, deviceId).executeTakeFirst();
+    return row ? deviceHelper.rowToDeviceData(row) : null;
   }
 
   async updateDevice(
@@ -509,26 +511,26 @@ export class OAuthStore
   ): Promise<void> {
     await this.db.executeWithRetry(
       deviceHelper.updateQB(this.db, deviceId, data),
-    )
+    );
   }
 
   async deleteDevice(deviceId: DeviceId): Promise<void> {
     // Will cascade to device_account (device_account_device_id_fk)
-    await this.db.executeWithRetry(deviceHelper.removeQB(this.db, deviceId))
+    await this.db.executeWithRetry(deviceHelper.removeQB(this.db, deviceId));
   }
 
   // LexiconStore
 
   async findLexicon(nsid: string): Promise<LexiconData | null> {
-    return lexiconHelper.find(this.db, nsid)
+    return lexiconHelper.find(this.db, nsid);
   }
 
   async storeLexicon(nsid: string, data: LexiconData): Promise<void> {
-    return lexiconHelper.upsert(this.db, nsid, data)
+    return lexiconHelper.upsert(this.db, nsid, data);
   }
 
   async deleteLexicon(nsid: string): Promise<void> {
-    return lexiconHelper.remove(this.db, nsid)
+    return lexiconHelper.remove(this.db, nsid);
   }
 
   // TokenStore
@@ -542,32 +544,32 @@ export class OAuthStore
       if (refreshToken) {
         const { count } = await usedRefreshTokenHelper
           .countQB(dbTxn, refreshToken)
-          .executeTakeFirstOrThrow()
+          .executeTakeFirstOrThrow();
 
         if (count > 0) {
-          throw new Error('Refresh token already in use')
+          throw new Error('Refresh token already in use');
         }
       }
 
-      return tokenHelper.createQB(dbTxn, id, data, refreshToken).execute()
-    })
+      return tokenHelper.createQB(dbTxn, id, data, refreshToken).execute();
+    });
   }
 
   async listAccountTokens(sub: Sub): Promise<TokenInfo[]> {
-    const rows = await tokenHelper.findByQB(this.db, { did: sub }).execute()
-    return Promise.all(rows.map((row) => this.toTokenInfo(row)))
+    const rows = await tokenHelper.findByQB(this.db, { did: sub }).execute();
+    return Promise.all(rows.map((row) => this.toTokenInfo(row)));
   }
 
   async readToken(tokenId: TokenId): Promise<TokenInfo | null> {
     const row = await tokenHelper
       .findByQB(this.db, { tokenId })
-      .executeTakeFirst()
-    return row ? this.toTokenInfo(row) : null
+      .executeTakeFirst();
+    return row ? this.toTokenInfo(row) : null;
   }
 
   async deleteToken(tokenId: TokenId): Promise<void> {
     // Will cascade to used_refresh_token (used_refresh_token_fk)
-    await this.db.executeWithRetry(tokenHelper.removeQB(this.db, tokenId))
+    await this.db.executeWithRetry(tokenHelper.removeQB(this.db, tokenId));
   }
 
   async rotateToken(
@@ -579,29 +581,29 @@ export class OAuthStore
     const err = await this.db.transaction(async (dbTxn) => {
       const { id, currentRefreshToken } = await tokenHelper
         .forRotateQB(dbTxn, tokenId)
-        .executeTakeFirstOrThrow()
+        .executeTakeFirstOrThrow();
 
       if (currentRefreshToken) {
         await usedRefreshTokenHelper
           .insertQB(dbTxn, id, currentRefreshToken)
-          .execute()
+          .execute();
       }
 
       const { count } = await usedRefreshTokenHelper
         .countQB(dbTxn, newRefreshToken)
-        .executeTakeFirstOrThrow()
+        .executeTakeFirstOrThrow();
 
       if (count > 0) {
         // Do NOT throw (we don't want the transaction to be rolled back)
-        return new Error('New refresh token already in use')
+        return new Error('New refresh token already in use');
       }
 
       await tokenHelper
         .rotateQB(dbTxn, id, newTokenId, newRefreshToken, newData)
-        .execute()
-    })
+        .execute();
+    });
 
-    if (err) throw err
+    if (err) throw err;
   }
 
   async findTokenByRefreshToken(
@@ -609,19 +611,21 @@ export class OAuthStore
   ): Promise<TokenInfo | null> {
     const used = await usedRefreshTokenHelper
       .findByTokenQB(this.db, refreshToken)
-      .executeTakeFirst()
+      .executeTakeFirst();
 
     const search = used
       ? { id: used.tokenId }
-      : { currentRefreshToken: refreshToken }
+      : { currentRefreshToken: refreshToken };
 
-    const row = await tokenHelper.findByQB(this.db, search).executeTakeFirst()
-    return row ? this.toTokenInfo(row) : null
+    const row = await tokenHelper.findByQB(this.db, search).executeTakeFirst();
+    return row ? this.toTokenInfo(row) : null;
   }
 
   async findTokenByCode(code: Code): Promise<TokenInfo | null> {
-    const row = await tokenHelper.findByQB(this.db, { code }).executeTakeFirst()
-    return row ? this.toTokenInfo(row) : null
+    const row = await tokenHelper
+      .findByQB(this.db, { code })
+      .executeTakeFirst();
+    return row ? this.toTokenInfo(row) : null;
   }
 
   private async toTokenInfo(
@@ -632,7 +636,7 @@ export class OAuthStore
       data: tokenHelper.toTokenData(row),
       account: await this.buildAccount(row),
       currentRefreshToken: row.currentRefreshToken,
-    }
+    };
   }
 
   private async buildAccount(
@@ -644,30 +648,30 @@ export class OAuthStore
       email: row.email || undefined,
       email_verified: row.email ? row.emailConfirmedAt != null : undefined,
       preferred_username: row.handle || undefined,
-    }
+    };
 
     if (!account.name || !account.picture) {
-      const did = account.sub
+      const did = account.sub;
 
       const profile = await this.actorStore
         .read(did, async (store) => {
-          return store.record.getProfileRecord()
+          return store.record.getProfileRecord();
         })
         .catch((err) => {
-          dbLogger.error({ err }, 'Failed to get profile record')
-          return null // No need to propagate
-        })
+          dbLogger.error({ err }, 'Failed to get profile record');
+          return null; // No need to propagate
+        });
 
       if (profile) {
-        const { avatar, displayName } = profile
+        const { avatar, displayName } = profile;
 
-        account.name ||= displayName
+        account.name ||= displayName;
         account.picture ||= avatar
           ? this.imageUrlBuilder.build('avatar', did, getBlobCidString(avatar))
-          : undefined
+          : undefined;
       }
     }
 
-    return account
+    return account;
   }
 }

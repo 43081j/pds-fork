@@ -1,7 +1,7 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { formatAccountInfo } from './util.js'
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { formatAccountInfo } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.admin.getAccountInfo, {
@@ -14,11 +14,11 @@ export default function (server: Server, ctx: AppContext) {
         }),
         ctx.accountManager.getAccountInvitesCodes(params.did),
         ctx.accountManager.getInvitedByForAccounts([params.did]),
-      ])
+      ]);
       if (!account) {
-        throw new InvalidRequestError('Account not found', 'NotFound')
+        throw new InvalidRequestError('Account not found', 'NotFound');
       }
-      const managesOwnInvites = !ctx.cfg.entryway
+      const managesOwnInvites = !ctx.cfg.entryway;
       return {
         encoding: 'application/json' as const,
         body: formatAccountInfo(account, {
@@ -26,7 +26,7 @@ export default function (server: Server, ctx: AppContext) {
           invitedBy,
           invites,
         }),
-      }
+      };
     },
-  })
+  });
 }

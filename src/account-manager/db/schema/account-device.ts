@@ -1,14 +1,14 @@
-import { DeviceId } from '@atproto/oauth-provider'
-import { DateISO } from '../../../db/index.js'
+import { DeviceId } from '@atproto/oauth-provider';
+import { DateISO } from '../../../db/index.js';
 
 export interface AccountDevice {
-  did: string
-  deviceId: DeviceId
+  did: string;
+  deviceId: DeviceId;
 
-  createdAt: DateISO
-  updatedAt: DateISO
+  createdAt: DateISO;
+  updatedAt: DateISO;
 }
 
-export const tableName = 'account_device'
+export const tableName = 'account_device';
 
-export type PartialDB = { [tableName]: AccountDevice }
+export type PartialDB = { [tableName]: AccountDevice };

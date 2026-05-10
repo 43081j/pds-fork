@@ -3,9 +3,9 @@ import {
   AuthorizedClients,
   ClientId,
   Sub,
-} from '@atproto/oauth-provider'
-import { fromJson, toDateISO, toJson } from '../../db/index.js'
-import { AccountDb } from '../db/index.js'
+} from '@atproto/oauth-provider';
+import { fromJson, toDateISO, toJson } from '../../db/index.js';
+import { AccountDb } from '../db/index.js';
 
 export async function upsert(
   db: AccountDb,
@@ -13,7 +13,7 @@ export async function upsert(
   clientId: ClientId,
   data: AuthorizedClientData,
 ) {
-  const now = new Date()
+  const now = new Date();
 
   return db.db
     .insertInto('authorized_client')
@@ -31,14 +31,14 @@ export async function upsert(
         data: toJson(data),
       }),
     )
-    .executeTakeFirst()
+    .executeTakeFirst();
 }
 
 export async function getAuthorizedClients(
   db: AccountDb,
   did: string,
 ): Promise<AuthorizedClients> {
-  return (await getAuthorizedClientsMulti(db, [did])).get(did)!
+  return (await getAuthorizedClientsMulti(db, [did])).get(did)!;
 }
 
 export async function getAuthorizedClientsMulti(
@@ -48,7 +48,7 @@ export async function getAuthorizedClientsMulti(
   // Using a Map will ensure unicity of dids (through unicity of keys)
   const map = new Map<Sub, AuthorizedClients>(
     Array.from(dids, (did) => [did, new Map()]),
-  )
+  );
 
   if (map.size) {
     const found = await db.db
@@ -58,12 +58,12 @@ export async function getAuthorizedClientsMulti(
       .select('data')
       // uses "authorized_client_pk"
       .where('did', 'in', [...map.keys()])
-      .execute()
+      .execute();
 
     for (const { did, clientId, data } of found) {
-      map.get(did)!.set(clientId, fromJson(data))
+      map.get(did)!.set(clientId, fromJson(data));
     }
   }
 
-  return map
+  return map;
 }

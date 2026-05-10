@@ -1,32 +1,29 @@
-import Redis from 'ioredis'
-import { DAY, backoffMs, retry } from '@atproto/common'
-import { Client, XrpcError } from '@atproto/lex'
-import { InvalidTokenError, OAuthScope } from '@atproto/oauth-provider'
-import { UpstreamFailureError } from '@atproto/xrpc-server'
-import { CachedGetter, GetterOptions } from '@atproto-labs/simple-store'
-import { SimpleStoreMemory } from '@atproto-labs/simple-store-memory'
-import { SimpleStoreRedis } from '@atproto-labs/simple-store-redis'
-import { com } from '../lexicons.js'
-import { oauthLogger } from '../logger.js'
+import Redis from 'ioredis';
+import { DAY, backoffMs, retry } from '@atproto/common';
+import { Client, XrpcError } from '@atproto/lex';
+import { InvalidTokenError, OAuthScope } from '@atproto/oauth-provider';
+import { UpstreamFailureError } from '@atproto/xrpc-server';
+import { CachedGetter, GetterOptions } from '@atproto-labs/simple-store';
+import { SimpleStoreMemory } from '@atproto-labs/simple-store-memory';
+import { SimpleStoreRedis } from '@atproto-labs/simple-store-redis';
+import { com } from '../lexicons.js';
+import { oauthLogger } from '../logger.js';
 
-const PREFIX = 'ref:'
+const PREFIX = 'ref:';
 
-type ScopeReference = `${typeof PREFIX}${string}`
+type ScopeReference = `${typeof PREFIX}${string}`;
 const isScopeReference = (scope?: OAuthScope): scope is ScopeReference =>
-  scope != null && scope.startsWith(PREFIX) && !scope.includes(' ')
+  scope != null && scope.startsWith(PREFIX) && !scope.includes(' ');
 
-const identity = <T>(value: T): T => value
+const identity = <T>(value: T): T => value;
 
 export class ScopeReferenceGetter extends CachedGetter<
   ScopeReference,
   OAuthScope
 > {
-  protected readonly entryway: Client
+  protected readonly entryway: Client;
 
-  constructor(
-    entryway: Client,
-    redis?: Redis,
-  ) {
+  constructor(entryway: Client, redis?: Redis) {
     super(
       async (ref, options) => {
         return retry(async () => this.fetchDereferencedScope(ref, options), {
@@ -36,7 +33,7 @@ export class ScopeReferenceGetter extends CachedGetter<
             !options?.signal?.aborted &&
             err instanceof XrpcError &&
             err.shouldRetry(),
-        })
+        });
       },
       redis
         ? new SimpleStoreRedis(redis, {
@@ -49,15 +46,15 @@ export class ScopeReferenceGetter extends CachedGetter<
             decode: identity,
           })
         : new SimpleStoreMemory({ max: 1000 }),
-    )
-    this.entryway = entryway
+    );
+    this.entryway = entryway;
   }
 
   protected async fetchDereferencedScope(
     ref: ScopeReference,
     opts?: GetterOptions,
   ): Promise<OAuthScope> {
-    oauthLogger.info({ ref }, 'Fetching scope reference')
+    oauthLogger.info({ ref }, 'Fetching scope reference');
 
     try {
       const { scope } = await this.entryway.call(
@@ -67,28 +64,28 @@ export class ScopeReferenceGetter extends CachedGetter<
           signal: opts?.signal,
           headers: opts?.noCache ? { 'Cache-Control': 'no-cache' } : undefined,
         },
-      )
+      );
 
-      oauthLogger.info({ ref, scope }, 'Successfully fetched scope reference')
+      oauthLogger.info({ ref, scope }, 'Successfully fetched scope reference');
 
       // @NOTE the part after `PREFIX` (in the input scope) is the CID of the
       // scope string returned by entryway. Since there is a trust
       // relationship with the entryway, we don't need to verify or enforce
       // that here.
 
-      return scope
+      return scope;
     } catch (err) {
-      oauthLogger.error({ err, ref }, 'Failed to fetch scope reference')
+      oauthLogger.error({ err, ref }, 'Failed to fetch scope reference');
 
-      throw err
+      throw err;
     }
   }
 
   async dereference(scope?: OAuthScope): Promise<undefined | OAuthScope> {
-    oauthLogger.debug({ scope }, 'Dereferencing scope')
+    oauthLogger.debug({ scope }, 'Dereferencing scope');
 
-    if (!isScopeReference(scope)) return scope
-    return this.get(scope).catch(handleDereferenceError)
+    if (!isScopeReference(scope)) return scope;
+    return this.get(scope).catch(handleDereferenceError);
   }
 }
 
@@ -98,12 +95,12 @@ function handleDereferenceError(cause: unknown): never {
     // Consider the session as invalid, allowing entryway to
     // re-build the scope as the user re-authenticates. This
     // should never happen though.
-    throw InvalidTokenError.from(cause, 'DPoP')
+    throw InvalidTokenError.from(cause, 'DPoP');
   }
 
   throw new UpstreamFailureError(
     'Failed to fetch token permissions',
     undefined,
     { cause },
-  )
+  );
 }

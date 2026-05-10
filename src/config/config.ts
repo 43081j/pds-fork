@@ -1,21 +1,21 @@
-import assert from 'node:assert'
-import path from 'node:path'
-import { DAY, HOUR, SECOND } from '@atproto/common'
-import { BrandingInput, HcaptchaConfig } from '@atproto/oauth-provider'
-import { ensureValidDid } from '@atproto/syntax'
-import { ServerEnvironment } from './env.js'
+import assert from 'node:assert';
+import path from 'node:path';
+import { DAY, HOUR, SECOND } from '@atproto/common';
+import { BrandingInput, HcaptchaConfig } from '@atproto/oauth-provider';
+import { ensureValidDid } from '@atproto/syntax';
+import { ServerEnvironment } from './env.js';
 
 // off-config but still from env:
 // logging: LOG_LEVEL, LOG_SYSTEMS, LOG_ENABLED, LOG_DESTINATION
 
 export const envToCfg = (env: ServerEnvironment): ServerConfig => {
-  const port = env.port ?? 2583
-  const hostname = env.hostname ?? 'localhost'
+  const port = env.port ?? 2583;
+  const hostname = env.hostname ?? 'localhost';
   const publicUrl =
     hostname === 'localhost'
       ? `http://localhost:${port}`
-      : `https://${hostname}`
-  const did = env.serviceDid ?? `did:web:${hostname}`
+      : `https://${hostname}`;
+  const did = env.serviceDid ?? `did:web:${hostname}`;
   const serviceCfg: ServerConfig['service'] = {
     port,
     hostname,
@@ -29,30 +29,30 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     maxImportSize: env.maxImportSize,
     blobUploadLimit: env.blobUploadLimit ?? 5 * 1024 * 1024, // 5mb
     devMode: env.devMode ?? false,
-  }
+  };
 
   const dbLoc = (name: string) => {
-    return env.dataDirectory ? path.join(env.dataDirectory, name) : name
-  }
+    return env.dataDirectory ? path.join(env.dataDirectory, name) : name;
+  };
 
-  const disableWalAutoCheckpoint = env.disableWalAutoCheckpoint ?? false
+  const disableWalAutoCheckpoint = env.disableWalAutoCheckpoint ?? false;
 
   const dbCfg: ServerConfig['db'] = {
     accountDbLoc: env.accountDbLocation ?? dbLoc('account.sqlite'),
     sequencerDbLoc: env.sequencerDbLocation ?? dbLoc('sequencer.sqlite'),
     didCacheDbLoc: env.didCacheDbLocation ?? dbLoc('did_cache.sqlite'),
     disableWalAutoCheckpoint,
-  }
+  };
 
   const actorStoreCfg: ServerConfig['actorStore'] = {
     directory: env.actorStoreDirectory ?? dbLoc('actors'),
     cacheSize: env.actorStoreCacheSize ?? 100,
     disableWalAutoCheckpoint,
-  }
+  };
 
-  let blobstoreCfg: ServerConfig['blobstore']
+  let blobstoreCfg: ServerConfig['blobstore'];
   if (env.blobstoreS3Bucket && env.blobstoreDiskLocation) {
-    throw new Error('Cannot set both S3 and disk blobstore env vars')
+    throw new Error('Cannot set both S3 and disk blobstore env vars');
   }
   if (env.blobstoreS3Bucket) {
     blobstoreCfg = {
@@ -62,43 +62,43 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
       region: env.blobstoreS3Region,
       endpoint: env.blobstoreS3Endpoint,
       forcePathStyle: env.blobstoreS3ForcePathStyle,
-    }
+    };
     if (env.blobstoreS3AccessKeyId || env.blobstoreS3SecretAccessKey) {
       if (!env.blobstoreS3AccessKeyId || !env.blobstoreS3SecretAccessKey) {
         throw new Error(
           'Must specify both S3 access key id and secret access key blobstore env vars',
-        )
+        );
       }
       blobstoreCfg.credentials = {
         accessKeyId: env.blobstoreS3AccessKeyId,
         secretAccessKey: env.blobstoreS3SecretAccessKey,
-      }
+      };
     }
   } else if (env.blobstoreDiskLocation) {
     blobstoreCfg = {
       provider: 'disk',
       location: env.blobstoreDiskLocation,
       tempLocation: env.blobstoreDiskTmpLocation,
-    }
+    };
   } else {
-    throw new Error('Must configure either S3 or disk blobstore')
+    throw new Error('Must configure either S3 or disk blobstore');
   }
 
-  let serviceHandleDomains: string[]
+  let serviceHandleDomains: string[];
   if (env.serviceHandleDomains && env.serviceHandleDomains.length > 0) {
-    serviceHandleDomains = env.serviceHandleDomains
+    serviceHandleDomains = env.serviceHandleDomains;
   } else {
     if (hostname === 'localhost') {
-      serviceHandleDomains = ['.test']
+      serviceHandleDomains = ['.test'];
     } else {
-      serviceHandleDomains = [`.${hostname}`]
+      serviceHandleDomains = [`.${hostname}`];
     }
   }
   const invalidDomain = serviceHandleDomains.find(
     (domain) => domain.length < 1 || !domain.startsWith('.'),
-  )
+  );
   if (invalidDomain) {
-    throw new Error(`Invalid handle domain: ${invalidDomain}`)
+    throw new Error(`Invalid handle domain: ${invalidDomain}`);
   }
 
   const identityCfg: ServerConfig['identity'] = {
@@ -110,22 +110,22 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     serviceHandleDomains,
     handleBackupNameservers: env.handleBackupNameservers,
     enableDidDocWithSession: !!env.enableDidDocWithSession,
-  }
+  };
 
-  let entrywayCfg: ServerConfig['entryway'] = null
+  let entrywayCfg: ServerConfig['entryway'] = null;
   if (env.entrywayUrl) {
     assert(
       env.entrywayJwtVerifyKeyK256PublicKeyHex &&
         env.entrywayPlcRotationKey &&
         env.entrywayDid,
       'if entryway url is configured, must include all required entryway configuration',
-    )
+    );
     entrywayCfg = {
       url: env.entrywayUrl,
       did: env.entrywayDid,
       jwtPublicKeyHex: env.entrywayJwtVerifyKeyK256PublicKeyHex,
       plcRotationKey: env.entrywayPlcRotationKey,
-    }
+    };
   }
 
   // default to being required if left undefined
@@ -138,83 +138,83 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
           required: true,
           interval: env.inviteInterval ?? null,
           epoch: env.inviteEpoch ?? 0,
-        }
+        };
 
-  let emailCfg: ServerConfig['email']
+  let emailCfg: ServerConfig['email'];
   if (!env.emailFromAddress && !env.emailSmtpUrl) {
-    emailCfg = null
+    emailCfg = null;
   } else {
     if (!env.emailFromAddress || !env.emailSmtpUrl) {
       throw new Error(
         'Partial email config, must set both emailFromAddress and emailSmtpUrl',
-      )
+      );
     }
     emailCfg = {
       smtpUrl: env.emailSmtpUrl,
       fromAddress: env.emailFromAddress,
-    }
+    };
   }
 
-  let moderationEmailCfg: ServerConfig['moderationEmail']
+  let moderationEmailCfg: ServerConfig['moderationEmail'];
   if (!env.moderationEmailAddress && !env.moderationEmailSmtpUrl) {
-    moderationEmailCfg = null
+    moderationEmailCfg = null;
   } else {
     if (!env.moderationEmailAddress || !env.moderationEmailSmtpUrl) {
       throw new Error(
         'Partial moderation email config, must set both emailFromAddress and emailSmtpUrl',
-      )
+      );
     }
     moderationEmailCfg = {
       smtpUrl: env.moderationEmailSmtpUrl,
       fromAddress: env.moderationEmailAddress,
-    }
+    };
   }
 
   const subscriptionCfg: ServerConfig['subscription'] = {
     maxBuffer: env.maxSubscriptionBuffer ?? 500,
     repoBackfillLimitMs: env.repoBackfillLimitMs ?? DAY,
-  }
+  };
 
-  let bskyAppViewCfg: ServerConfig['bskyAppView'] = null
+  let bskyAppViewCfg: ServerConfig['bskyAppView'] = null;
   if (env.bskyAppViewUrl) {
     assert(
       env.bskyAppViewDid,
       'if bsky appview service url is configured, must configure its did as well.',
-    )
+    );
     bskyAppViewCfg = {
       url: env.bskyAppViewUrl,
       did: env.bskyAppViewDid,
       cdnUrlPattern: env.bskyAppViewCdnUrlPattern,
-    }
+    };
   }
 
-  let modServiceCfg: ServerConfig['modService'] = null
+  let modServiceCfg: ServerConfig['modService'] = null;
   if (env.modServiceUrl) {
     assert(
       env.modServiceDid,
       'if mod service url is configured, must configure its did as well.',
-    )
+    );
     modServiceCfg = {
       url: env.modServiceUrl,
       did: env.modServiceDid,
-    }
+    };
   }
 
-  let reportServiceCfg: ServerConfig['reportService'] = null
+  let reportServiceCfg: ServerConfig['reportService'] = null;
   if (env.reportServiceUrl) {
     assert(
       env.reportServiceDid,
       'if report service url is configured, must configure its did as well.',
-    )
+    );
     reportServiceCfg = {
       url: env.reportServiceUrl,
       did: env.reportServiceDid,
-    }
+    };
   }
 
   // if there's a mod service, default report service into it
   if (modServiceCfg && !reportServiceCfg) {
-    reportServiceCfg = modServiceCfg
+    reportServiceCfg = modServiceCfg;
   }
 
   const redisCfg: ServerConfig['redis'] = env.redisScratchAddress
@@ -222,7 +222,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
         address: env.redisScratchAddress,
         password: env.redisScratchPassword,
       }
-    : null
+    : null;
 
   const rateLimitsCfg: ServerConfig['rateLimits'] = env.rateLimitsEnabled
     ? {
@@ -232,14 +232,14 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
           (ipOrCidr.split('/')[0] ?? ipOrCidr).trim(),
         ),
       }
-    : { enabled: false }
+    : { enabled: false };
 
-  const crawlersCfg: ServerConfig['crawlers'] = env.crawlers ?? []
+  const crawlersCfg: ServerConfig['crawlers'] = env.crawlers ?? [];
 
   const fetchCfg: ServerConfig['fetch'] = {
     disableSsrfProtection: env.disableSsrfProtection ?? env.devMode ?? false,
     maxResponseSize: env.fetchMaxResponseSize ?? 512 * 1024, // 512kb
-  }
+  };
 
   const proxyCfg: ServerConfig['proxy'] = {
     disableSsrfProtection: env.disableSsrfProtection ?? env.devMode ?? false,
@@ -252,7 +252,7 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
         ? env.proxyMaxRetries
         : 0,
     preferCompressed: env.proxyPreferCompressed ?? false,
-  }
+  };
 
   const oauthCfg: ServerConfig['oauth'] = entrywayCfg
     ? {
@@ -329,13 +329,13 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
           },
           trustedClients: env.trustedOAuthClients,
         },
-      }
+      };
 
-  const lexiconCfg: LexiconResolverConfig = {}
+  const lexiconCfg: LexiconResolverConfig = {};
 
   if (env.lexiconDidAuthority != null) {
-    ensureValidDid(env.lexiconDidAuthority)
-    lexiconCfg.didAuthority = env.lexiconDidAuthority
+    ensureValidDid(env.lexiconDidAuthority);
+    lexiconCfg.didAuthority = env.lexiconDidAuthority;
   }
 
   return {
@@ -359,109 +359,109 @@ export const envToCfg = (env: ServerEnvironment): ServerConfig => {
     lexicon: lexiconCfg,
     proxy: proxyCfg,
     oauth: oauthCfg,
-  }
-}
+  };
+};
 
 export type ServerConfig = {
-  service: ServiceConfig
-  db: DatabaseConfig
-  actorStore: ActorStoreConfig
-  blobstore: S3BlobstoreConfig | DiskBlobstoreConfig
-  identity: IdentityConfig
-  entryway: EntrywayConfig | null
-  invites: InvitesConfig
-  email: EmailConfig | null
-  moderationEmail: EmailConfig | null
-  subscription: SubscriptionConfig
-  bskyAppView: BksyAppViewConfig | null
-  modService: ModServiceConfig | null
-  reportService: ReportServiceConfig | null
-  redis: RedisScratchConfig | null
-  rateLimits: RateLimitsConfig
-  crawlers: string[]
-  fetch: FetchConfig
-  proxy: ProxyConfig
-  oauth: OAuthConfig
-  lexicon: LexiconResolverConfig
-}
+  service: ServiceConfig;
+  db: DatabaseConfig;
+  actorStore: ActorStoreConfig;
+  blobstore: S3BlobstoreConfig | DiskBlobstoreConfig;
+  identity: IdentityConfig;
+  entryway: EntrywayConfig | null;
+  invites: InvitesConfig;
+  email: EmailConfig | null;
+  moderationEmail: EmailConfig | null;
+  subscription: SubscriptionConfig;
+  bskyAppView: BksyAppViewConfig | null;
+  modService: ModServiceConfig | null;
+  reportService: ReportServiceConfig | null;
+  redis: RedisScratchConfig | null;
+  rateLimits: RateLimitsConfig;
+  crawlers: string[];
+  fetch: FetchConfig;
+  proxy: ProxyConfig;
+  oauth: OAuthConfig;
+  lexicon: LexiconResolverConfig;
+};
 
 export type ServiceConfig = {
-  port: number
-  hostname: string
-  publicUrl: string
-  did: string
-  version?: string
-  privacyPolicyUrl?: string
-  termsOfServiceUrl?: string
-  acceptingImports: boolean
-  maxImportSize?: number
-  blobUploadLimit: number
-  contactEmailAddress?: string
-  devMode: boolean
-}
+  port: number;
+  hostname: string;
+  publicUrl: string;
+  did: string;
+  version?: string;
+  privacyPolicyUrl?: string;
+  termsOfServiceUrl?: string;
+  acceptingImports: boolean;
+  maxImportSize?: number;
+  blobUploadLimit: number;
+  contactEmailAddress?: string;
+  devMode: boolean;
+};
 
 export type DatabaseConfig = {
-  accountDbLoc: string
-  sequencerDbLoc: string
-  didCacheDbLoc: string
-  disableWalAutoCheckpoint: boolean
-}
+  accountDbLoc: string;
+  sequencerDbLoc: string;
+  didCacheDbLoc: string;
+  disableWalAutoCheckpoint: boolean;
+};
 
 export type ActorStoreConfig = {
-  directory: string
-  cacheSize: number
-  disableWalAutoCheckpoint: boolean
-}
+  directory: string;
+  cacheSize: number;
+  disableWalAutoCheckpoint: boolean;
+};
 
 export type S3BlobstoreConfig = {
-  provider: 's3'
-  bucket: string
-  region?: string
-  endpoint?: string
-  forcePathStyle?: boolean
-  uploadTimeoutMs?: number
+  provider: 's3';
+  bucket: string;
+  region?: string;
+  endpoint?: string;
+  forcePathStyle?: boolean;
+  uploadTimeoutMs?: number;
   credentials?: {
-    accessKeyId: string
-    secretAccessKey: string
-  }
-}
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
+};
 
 export type DiskBlobstoreConfig = {
-  provider: 'disk'
-  location: string
-  tempLocation?: string
-}
+  provider: 'disk';
+  location: string;
+  tempLocation?: string;
+};
 
 export type IdentityConfig = {
-  plcUrl: string
-  resolverTimeout: number
-  cacheStaleTTL: number
-  cacheMaxTTL: number
-  recoveryDidKey: string | null
-  serviceHandleDomains: string[]
-  handleBackupNameservers?: string[]
-  enableDidDocWithSession: boolean
-}
+  plcUrl: string;
+  resolverTimeout: number;
+  cacheStaleTTL: number;
+  cacheMaxTTL: number;
+  recoveryDidKey: string | null;
+  serviceHandleDomains: string[];
+  handleBackupNameservers?: string[];
+  enableDidDocWithSession: boolean;
+};
 
 export type EntrywayConfig = {
-  url: string
-  did: string
-  jwtPublicKeyHex: string
-  plcRotationKey: string
-}
+  url: string;
+  did: string;
+  jwtPublicKeyHex: string;
+  plcRotationKey: string;
+};
 
 export type FetchConfig = {
-  disableSsrfProtection: boolean
-  maxResponseSize: number
-}
+  disableSsrfProtection: boolean;
+  maxResponseSize: number;
+};
 
 export type ProxyConfig = {
-  disableSsrfProtection: boolean
-  allowHTTP2: boolean
-  headersTimeout: number
-  bodyTimeout: number
-  maxResponseSize: number
-  maxRetries: number
+  disableSsrfProtection: boolean;
+  allowHTTP2: boolean;
+  headersTimeout: number;
+  bodyTimeout: number;
+  maxResponseSize: number;
+  maxRetries: number;
 
   /**
    * When proxying requests that might get intercepted (for read-after-write) we
@@ -470,67 +470,67 @@ export type ProxyConfig = {
    * need to perform content decoding. This settings allows to prefer compressed
    * content over uncompressed one.
    */
-  preferCompressed: boolean
-}
+  preferCompressed: boolean;
+};
 
 export type OAuthConfig = {
-  issuer: string
+  issuer: string;
   provider?: {
-    hcaptcha?: HcaptchaConfig
-    branding: BrandingInput
-    trustedClients?: string[]
-  }
-}
+    hcaptcha?: HcaptchaConfig;
+    branding: BrandingInput;
+    trustedClients?: string[];
+  };
+};
 
 export type LexiconResolverConfig = {
-  didAuthority?: `did:${string}:${string}`
-}
+  didAuthority?: `did:${string}:${string}`;
+};
 
 export type InvitesConfig =
   | {
-      required: true
-      interval: number | null
-      epoch: number
+      required: true;
+      interval: number | null;
+      epoch: number;
     }
   | {
-      required: false
-    }
+      required: false;
+    };
 
 export type EmailConfig = {
-  smtpUrl: string
-  fromAddress: string
-}
+  smtpUrl: string;
+  fromAddress: string;
+};
 
 export type SubscriptionConfig = {
-  maxBuffer: number
-  repoBackfillLimitMs: number
-}
+  maxBuffer: number;
+  repoBackfillLimitMs: number;
+};
 
 export type RedisScratchConfig = {
-  address: string
-  password?: string
-}
+  address: string;
+  password?: string;
+};
 
 export type RateLimitsConfig =
   | {
-      enabled: true
-      bypassKey?: string
-      bypassIps?: string[]
+      enabled: true;
+      bypassKey?: string;
+      bypassIps?: string[];
     }
-  | { enabled: false }
+  | { enabled: false };
 
 export type BksyAppViewConfig = {
-  url: string
-  did: string
-  cdnUrlPattern?: string
-}
+  url: string;
+  did: string;
+  cdnUrlPattern?: string;
+};
 
 export type ModServiceConfig = {
-  url: string
-  did: string
-}
+  url: string;
+  did: string;
+};
 
 export type ReportServiceConfig = {
-  url: string
-  did: string
-}
+  url: string;
+  did: string;
+};

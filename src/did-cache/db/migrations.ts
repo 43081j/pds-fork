@@ -1,4 +1,4 @@
-import { Kysely } from 'kysely'
+import { Kysely } from 'kysely';
 
 export default {
   '001': {
@@ -8,10 +8,10 @@ export default {
         .addColumn('did', 'varchar', (col) => col.primaryKey())
         .addColumn('doc', 'text', (col) => col.notNull())
         .addColumn('updatedAt', 'bigint', (col) => col.notNull())
-        .execute()
+        .execute();
     },
     down: async (db: Kysely<unknown>) => {
-      await db.schema.dropTable('did_doc').execute()
+      await db.schema.dropTable('did_doc').execute();
     },
   },
-}
+};

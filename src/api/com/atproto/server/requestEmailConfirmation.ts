@@ -1,7 +1,7 @@
-import { DAY, HOUR } from '@atproto/common'
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { DAY, HOUR } from '@atproto/common';
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.requestEmailConfirmation, {
@@ -20,17 +20,17 @@ export default function (server: Server, ctx: AppContext) {
     auth: ctx.authVerifier.authorization({
       checkTakedown: true,
       authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'email', action: 'manage' })
+        permissions.assertAccount({ attr: 'email', action: 'manage' });
       },
     }),
     handler: async ({ auth, req }) => {
-      const did = auth.credentials.did
+      const did = auth.credentials.did;
       const account = await ctx.accountManager.getAccount(did, {
         includeDeactivated: true,
         includeTakenDown: true,
-      })
+      });
       if (!account) {
-        throw new InvalidRequestError('account not found')
+        throw new InvalidRequestError('account not found');
       }
 
       if (ctx.entrywayClient) {
@@ -38,24 +38,24 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           com.atproto.server.requestEmailConfirmation.$lxm,
-        )
+        );
 
         await ctx.entrywayClient.xrpc(
           com.atproto.server.requestEmailConfirmation,
           { headers },
-        )
+        );
 
-        return
+        return;
       }
 
       if (!account.email) {
-        throw new InvalidRequestError('account does not have an email address')
+        throw new InvalidRequestError('account does not have an email address');
       }
       const token = await ctx.accountManager.createEmailToken(
         did,
         'confirm_email',
-      )
-      await ctx.mailer.sendConfirmEmail({ token }, { to: account.email })
+      );
+      await ctx.mailer.sendConfirmEmail({ token }, { to: account.email });
     },
-  })
+  });
 }

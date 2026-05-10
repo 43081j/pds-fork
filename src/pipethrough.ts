@@ -1,14 +1,14 @@
-import { IncomingHttpHeaders, ServerResponse } from 'node:http'
-import { PassThrough, Readable, finished } from 'node:stream'
-import { Request } from 'express'
-import { Dispatcher } from 'undici'
+import { IncomingHttpHeaders, ServerResponse } from 'node:http';
+import { PassThrough, Readable, finished } from 'node:stream';
+import { Request } from 'express';
+import { Dispatcher } from 'undici';
 import {
   decodeStream,
   getServiceEndpoint,
   omit,
   streamToNodeBuffer,
-} from '@atproto/common'
-import { RpcPermissionMatch } from '@atproto/oauth-scopes'
+} from '@atproto/common';
+import { RpcPermissionMatch } from '@atproto/oauth-scopes';
 import {
   CatchallHandler,
   HandlerPipeThroughBuffer,
@@ -19,17 +19,17 @@ import {
   XRPCError as XRPCServerError,
   excludeErrorResult,
   parseReqNsid,
-} from '@atproto/xrpc-server'
-import { buildProxiedContentEncoding } from '@atproto-labs/xrpc-utils'
-import { isAccessPrivileged } from './auth-scope.js'
-import { AppContext } from './context.js'
-import { chat, com, tools } from './lexicons.js'
-import { httpLogger } from './logger.js'
+} from '@atproto/xrpc-server';
+import { buildProxiedContentEncoding } from '@atproto-labs/xrpc-utils';
+import { isAccessPrivileged } from './auth-scope.js';
+import { AppContext } from './context.js';
+import { chat, com, tools } from './lexicons.js';
+import { httpLogger } from './logger.js';
 
 export const proxyHandler = (ctx: AppContext): CatchallHandler => {
   const performAuth = ctx.authVerifier.authorization<RpcPermissionMatch>({
     authorize: (permissions, { params }) => permissions.assertRpc(params),
-  })
+  });
 
   return async (req, res, next) => {
     // /!\ Hot path
@@ -42,32 +42,32 @@ export const proxyHandler = (ctx: AppContext): CatchallHandler => {
         throw new XRPCServerError(
           ResponseType.InvalidRequest,
           'XRPC requests only supports GET and POST',
-        )
+        );
       }
 
-      const body = req.method === 'POST' ? req : undefined
+      const body = req.method === 'POST' ? req : undefined;
       if (body != null && !body.readable) {
         // Body was already consumed by a previous middleware
-        throw new InternalServerError('Request body is not readable')
+        throw new InternalServerError('Request body is not readable');
       }
 
-      const lxm = parseReqNsid(req)
+      const lxm = parseReqNsid(req);
       if (PROTECTED_METHODS.has(lxm)) {
-        throw new InvalidRequestError('Bad token method', 'InvalidToken')
+        throw new InvalidRequestError('Bad token method', 'InvalidToken');
       }
 
-      const { url: origin, did: aud } = await parseProxyInfo(ctx, req, lxm)
+      const { url: origin, did: aud } = await parseProxyInfo(ctx, req, lxm);
 
-      const authResult = await performAuth({ req, res, params: { lxm, aud } })
+      const authResult = await performAuth({ req, res, params: { lxm, aud } });
 
-      const { credentials } = excludeErrorResult(authResult)
+      const { credentials } = excludeErrorResult(authResult);
 
       if (
         credentials.type === 'access' &&
         !isAccessPrivileged(credentials.scope) &&
         PRIVILEGED_METHODS.has(lxm)
       ) {
-        throw new InvalidRequestError('Bad token method', 'InvalidToken')
+        throw new InvalidRequestError('Bad token method', 'InvalidToken');
       }
 
       const headers: IncomingHttpHeaders = {
@@ -81,7 +81,7 @@ export const proxyHandler = (ctx: AppContext): CatchallHandler => {
         'content-length': body && req.headers['content-length'],
 
         authorization: `Bearer ${await ctx.serviceAuthJwt(credentials.did, aud, lxm)}`,
-      }
+      };
 
       const dispatchOptions: Dispatcher.RequestOptions = {
         origin,
@@ -89,47 +89,47 @@ export const proxyHandler = (ctx: AppContext): CatchallHandler => {
         path: req.originalUrl,
         body,
         headers,
-      }
+      };
 
       await pipethroughStream(ctx, req, dispatchOptions, (upstream) => {
-        res.status(upstream.statusCode)
+        res.status(upstream.statusCode);
 
         for (const [name, val] of responseHeaders(upstream.headers)) {
-          res.setHeader(name, val)
+          res.setHeader(name, val);
         }
 
         // Note that we should not need to manually handle errors here (e.g. by
         // destroying the response), as the http server will handle them for us.
-        res.on('error', logResponseError)
+        res.on('error', logResponseError);
 
         // Tell undici to write the upstream response directly to the response
-        return res
-      })
+        return res;
+      });
     } catch (err) {
-      next(err)
+      next(err);
     }
-  }
-}
+  };
+};
 
 export type PipethroughOptions = {
   /**
    * Specify the issuer (requester) for service auth. If not provided, no
    * authorization headers will be added to the request.
    */
-  iss?: string
+  iss?: string;
 
   /**
    * Override the audience for service auth. If not provided, the audience will
    * be determined based on the proxy service.
    */
-  aud?: string
+  aud?: string;
 
   /**
    * Override the lexicon method for service auth. If not provided, the lexicon
    * method will be determined based on the request path.
    */
-  lxm?: string
-}
+  lxm?: string;
+};
 
 export async function pipethrough(
   ctx: AppContext,
@@ -137,9 +137,9 @@ export async function pipethrough(
   options?: PipethroughOptions,
 ): Promise<
   HandlerPipeThroughStream & {
-    stream: Readable
-    headers: Record<string, string>
-    encoding: string
+    stream: Readable;
+    headers: Record<string, string>;
+    encoding: string;
   }
 > {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -151,12 +151,12 @@ export async function pipethrough(
     // implemented.
     throw new InternalServerError(
       `Proxying of ${req.method} requests is not supported`,
-    )
+    );
   }
 
-  const lxm = parseReqNsid(req)
+  const lxm = parseReqNsid(req);
 
-  const { url: origin, did: aud } = await parseProxyInfo(ctx, req, lxm)
+  const { url: origin, did: aud } = await parseProxyInfo(ctx, req, lxm);
 
   const dispatchOptions: Dispatcher.RequestOptions = {
     origin,
@@ -186,15 +186,15 @@ export async function pipethrough(
     // operations before this stream is consumed. This is especially useful
     // while processing read-after-write operations.
     highWaterMark: 2 * 65536, // twice the default (64KiB)
-  }
+  };
 
-  const { headers, body } = await pipethroughRequest(ctx, req, dispatchOptions)
+  const { headers, body } = await pipethroughRequest(ctx, req, dispatchOptions);
 
   return {
     encoding: safeString(headers['content-type']) ?? 'application/json',
     headers: Object.fromEntries(responseHeaders(headers)),
     stream: body,
-  }
+  };
 }
 
 // Request setup/formatting
@@ -205,15 +205,15 @@ export function computeProxyTo(
   req: Request,
   lxm: string,
 ): string {
-  const proxyToHeader = req.header('atproto-proxy')
-  if (proxyToHeader) return proxyToHeader
+  const proxyToHeader = req.header('atproto-proxy');
+  if (proxyToHeader) return proxyToHeader;
 
-  const service = defaultService(ctx, lxm)
+  const service = defaultService(ctx, lxm);
   if (service.serviceInfo) {
-    return `${service.serviceInfo.did}#${service.serviceId}`
+    return `${service.serviceInfo.did}#${service.serviceId}`;
   }
 
-  throw new InvalidRequestError(`No service configured for ${lxm}`)
+  throw new InvalidRequestError(`No service configured for ${lxm}`);
 }
 
 export async function parseProxyInfo(
@@ -223,13 +223,13 @@ export async function parseProxyInfo(
 ): Promise<{ url: string; did: string }> {
   // /!\ Hot path
 
-  const proxyToHeader = req.header('atproto-proxy')
-  if (proxyToHeader) return parseProxyHeader(ctx, proxyToHeader)
+  const proxyToHeader = req.header('atproto-proxy');
+  if (proxyToHeader) return parseProxyHeader(ctx, proxyToHeader);
 
-  const { serviceInfo } = defaultService(ctx, lxm)
-  if (serviceInfo) return serviceInfo
+  const { serviceInfo } = defaultService(ctx, lxm);
+  if (serviceInfo) return serviceInfo;
 
-  throw new InvalidRequestError(`No service configured for ${lxm}`)
+  throw new InvalidRequestError(`No service configured for ${lxm}`);
 }
 
 export const parseProxyHeader = async (
@@ -239,49 +239,49 @@ export const parseProxyHeader = async (
 ): Promise<{ did: string; url: string }> => {
   // /!\ Hot path
 
-  const hashIndex = proxyTo.indexOf('#')
+  const hashIndex = proxyTo.indexOf('#');
 
   if (hashIndex === 0) {
-    throw new InvalidRequestError('no did specified in proxy header')
+    throw new InvalidRequestError('no did specified in proxy header');
   }
 
   if (hashIndex === -1 || hashIndex === proxyTo.length - 1) {
-    throw new InvalidRequestError('no service id specified in proxy header')
+    throw new InvalidRequestError('no service id specified in proxy header');
   }
 
   // More than one hash
   if (proxyTo.indexOf('#', hashIndex + 1) !== -1) {
-    throw new InvalidRequestError('invalid proxy header format')
+    throw new InvalidRequestError('invalid proxy header format');
   }
 
   // Basic validation
   if (proxyTo.includes(' ')) {
-    throw new InvalidRequestError('proxy header cannot contain spaces')
+    throw new InvalidRequestError('proxy header cannot contain spaces');
   }
 
-  const did = proxyTo.slice(0, hashIndex)
+  const did = proxyTo.slice(0, hashIndex);
 
   // Special case a configured appview, while still proxying correctly any other appview
   if (
     ctx.cfg.bskyAppView &&
     proxyTo === `${ctx.cfg.bskyAppView.did}#bsky_appview`
   ) {
-    return { did, url: ctx.cfg.bskyAppView.url }
+    return { did, url: ctx.cfg.bskyAppView.url };
   }
 
-  const didDoc = await ctx.idResolver.did.resolve(did)
+  const didDoc = await ctx.idResolver.did.resolve(did);
   if (!didDoc) {
-    throw new InvalidRequestError('could not resolve proxy did')
+    throw new InvalidRequestError('could not resolve proxy did');
   }
 
-  const serviceId = proxyTo.slice(hashIndex)
-  const url = getServiceEndpoint(didDoc, { id: serviceId })
+  const serviceId = proxyTo.slice(hashIndex);
+  const url = getServiceEndpoint(didDoc, { id: serviceId });
   if (!url) {
-    throw new InvalidRequestError('could not resolve proxy did service url')
+    throw new InvalidRequestError('could not resolve proxy did service url');
   }
 
-  return { did, url }
-}
+  return { did, url };
+};
 
 /**
  * Utility function that wraps the undici stream() function and handles request
@@ -299,20 +299,20 @@ async function pipethroughStream(
     void ctx.proxyAgent
       .stream(dispatchOptions, (upstream) => {
         if (upstream.statusCode >= 400) {
-          const passThrough = new PassThrough()
+          const passThrough = new PassThrough();
 
           void tryParsingError(upstream.headers, passThrough).then((parsed) => {
             const xrpcError = new PipethroughUpstreamError(upstream, parsed, {
               cause: dispatchOptions,
-            })
+            });
 
-            reject(xrpcError)
-          }, reject)
+            reject(xrpcError);
+          }, reject);
 
-          return passThrough
+          return passThrough;
         }
 
-        const writable = successStreamFactory(upstream)
+        const writable = successStreamFactory(upstream);
 
         // As soon as the control was passed to the writable stream (i.e. by
         // returning the writable hereafter), pipethroughStream() is considered
@@ -320,17 +320,17 @@ async function pipethroughStream(
         // the writable stream should be handled through the stream's error
         // state (i.e. successStreamFactory() must ensure that error events on
         // the returned writable will be handled).
-        resolve()
+        resolve();
 
-        return writable
+        return writable;
       })
       // The following catch block will be triggered with either network errors
       // or writable stream errors. In the latter case, the promise will already
       // be resolved, and reject()ing it there after will have no effect. Those
       // error would still be logged by the successStreamFactory() function.
       .catch(handleUpstreamRequestError.bind(req))
-      .catch(reject)
-  })
+      .catch(reject);
+  });
 }
 
 /**
@@ -347,17 +347,17 @@ async function pipethroughRequest(
 
   const upstream = await ctx.proxyAgent
     .request(dispatchOptions)
-    .catch(handleUpstreamRequestError.bind(req))
+    .catch(handleUpstreamRequestError.bind(req));
 
   if (upstream.statusCode >= 400) {
-    const parsed = await tryParsingError(upstream.headers, upstream.body)
+    const parsed = await tryParsingError(upstream.headers, upstream.body);
 
     throw new PipethroughUpstreamError(upstream, parsed, {
       cause: dispatchOptions,
-    })
+    });
   }
 
-  return upstream
+  return upstream;
 }
 
 function handleUpstreamRequestError(
@@ -365,25 +365,25 @@ function handleUpstreamRequestError(
   err: unknown,
   message = 'Upstream service unreachable',
 ): never {
-  const logger = isPinoHttpRequest(this) ? this.log : httpLogger
-  logger.error({ err }, message)
+  const logger = isPinoHttpRequest(this) ? this.log : httpLogger;
+  logger.error({ err }, message);
   throw new XRPCServerError(ResponseType.UpstreamFailure, message, undefined, {
     cause: err,
-  })
+  });
 }
 
 function isPinoHttpRequest(req: Request): req is Request & {
-  log: { error: (obj: unknown, msg: string) => void }
+  log: { error: (obj: unknown, msg: string) => void };
 } {
-  return typeof (req as { log?: any }).log?.error === 'function'
+  return typeof (req as { log?: any }).log?.error === 'function';
 }
 
 // Request parsing/forwarding
 // -------------------
 
 export function isJsonContentType(contentType?: string): boolean | undefined {
-  if (!contentType) return undefined
-  return /application\/(?:\w+\+)?json/i.test(contentType)
+  if (!contentType) return undefined;
+  return /application\/(?:\w+\+)?json/i.test(contentType);
 }
 
 async function tryParsingError(
@@ -405,30 +405,34 @@ async function tryParsingError(
     // is performed through the "finished" call below.
 
     const to = setTimeout(() => {
-      readable.destroy()
-    }, 100)
+      readable.destroy();
+    }, 100);
     finished(readable, (_err) => {
-      clearTimeout(to)
-    })
-    readable.resume()
+      clearTimeout(to);
+    });
+    readable.resume();
 
-    return {}
+    return {};
   }
 
   try {
     const buffer = await bufferUpstreamResponse(
       readable,
       headers['content-encoding'],
-    )
+    );
 
-    const errInfo: unknown = JSON.parse(buffer.toString('utf8'))
+    const errInfo: unknown = JSON.parse(buffer.toString('utf8'));
     return {
-      error: safeString((errInfo as Record<PropertyKey, unknown> | undefined)?.['error']),
-      message: safeString((errInfo as Record<PropertyKey, unknown> | undefined)?.['message']),
-    }
+      error: safeString(
+        (errInfo as Record<PropertyKey, unknown> | undefined)?.['error'],
+      ),
+      message: safeString(
+        (errInfo as Record<PropertyKey, unknown> | undefined)?.['message'],
+      ),
+    };
   } catch (err) {
     // Failed to read, decode, buffer or parse. No big deal.
-    return {}
+    return {};
   }
 }
 
@@ -437,16 +441,16 @@ async function bufferUpstreamResponse(
   contentEncoding?: string | string[],
 ): Promise<Buffer> {
   try {
-    return await streamToNodeBuffer(decodeStream(readable, contentEncoding))
+    return await streamToNodeBuffer(decodeStream(readable, contentEncoding));
   } catch (err) {
-    if (!readable.destroyed) readable.destroy()
+    if (!readable.destroyed) readable.destroy();
 
     throw new XRPCServerError(
       ResponseType.UpstreamFailure,
       err instanceof TypeError ? err.message : 'unable to decode request body',
       undefined,
       { cause: err },
-    )
+    );
   }
 }
 
@@ -460,7 +464,7 @@ export async function asPipeThroughBuffer(
     ),
     headers: omit(input.headers, ['content-encoding', 'content-length']),
     encoding: input.encoding,
-  }
+  };
 }
 
 // Response parsing/forwarding
@@ -470,32 +474,32 @@ const RES_HEADERS_TO_FORWARD = [
   'atproto-repo-rev',
   'atproto-content-labelers',
   'retry-after',
-]
+];
 
 function* responseHeaders(
   headers: IncomingHttpHeaders,
   includeContentHeaders = true,
 ): Generator<[string, string]> {
   if (includeContentHeaders) {
-    const length = headers['content-length']
-    if (length) yield ['content-length', length]
+    const length = headers['content-length'];
+    if (length) yield ['content-length', length];
 
-    const encoding = headers['content-encoding']
-    if (encoding) yield ['content-encoding', encoding]
+    const encoding = headers['content-encoding'];
+    if (encoding) yield ['content-encoding', encoding];
 
-    const type = headers['content-type']
-    if (type) yield ['content-type', type]
+    const type = headers['content-type'];
+    if (type) yield ['content-type', type];
 
-    const language = headers['content-language']
-    if (language) yield ['content-language', language]
+    const language = headers['content-language'];
+    if (language) yield ['content-language', language];
   }
 
   for (const name of RES_HEADERS_TO_FORWARD) {
-    const val = headers[name]
+    const val = headers[name];
 
     if (val != null) {
-      const value: string = Array.isArray(val) ? val.join(',') : val
-      yield [name, value]
+      const value: string = Array.isArray(val) ? val.join(',') : val;
+      yield [name, value];
     }
   }
 }
@@ -508,22 +512,22 @@ function* responseHeaders(
  * taking into account that they are treated case-insensitively.
  */
 export class LxmSet {
-  private inner: Set<string>
-  private original: Iterable<string>
+  private inner: Set<string>;
+  private original: Iterable<string>;
   constructor(items: Iterable<string>) {
-    this.inner = new Set(Array.from(items, normalizeLxm))
-    this.original = items
+    this.inner = new Set(Array.from(items, normalizeLxm));
+    this.original = items;
   }
   has(lxm: string) {
-    return this.inner.has(normalizeLxm(lxm))
+    return this.inner.has(normalizeLxm(lxm));
   }
   *[Symbol.iterator](): Iterator<string> {
-    yield* this.original
+    yield* this.original;
   }
 }
 
 export function normalizeLxm(lxm: string) {
-  return lxm.toLowerCase()
+  return lxm.toLowerCase();
 }
 
 export const CHAT_BSKY_METHODS = new LxmSet([
@@ -541,12 +545,12 @@ export const CHAT_BSKY_METHODS = new LxmSet([
   chat.bsky.convo.sendMessageBatch.$lxm,
   chat.bsky.convo.unmuteConvo.$lxm,
   chat.bsky.convo.updateRead.$lxm,
-])
+]);
 
 export const PRIVILEGED_METHODS = new LxmSet([
   ...CHAT_BSKY_METHODS,
   com.atproto.server.createAccount.$lxm,
-])
+]);
 
 // These endpoints are related to account management and must be used directly,
 // not proxied or service-authed. Service auth may be utilized between PDS and
@@ -568,14 +572,14 @@ export const PROTECTED_METHODS = new LxmSet([
   com.atproto.server.requestEmailUpdate.$lxm,
   com.atproto.server.revokeAppPassword.$lxm,
   com.atproto.server.updateEmail.$lxm,
-])
+]);
 
 const defaultService = (
   ctx: AppContext,
   nsid: string,
 ): {
-  serviceId: string
-  serviceInfo: { url: string; did: string } | null
+  serviceId: string;
+  serviceInfo: { url: string; did: string } | null;
 } => {
   switch (nsid) {
     case tools.ozone.communication.createTemplate.$lxm:
@@ -608,38 +612,38 @@ const defaultService = (
       return {
         serviceId: 'atproto_labeler',
         serviceInfo: ctx.cfg.modService,
-      }
+      };
     case com.atproto.moderation.createReport.$lxm:
       return {
         serviceId: 'atproto_labeler',
         serviceInfo: ctx.cfg.reportService,
-      }
+      };
     default:
       return {
         serviceId: 'bsky_appview',
         serviceInfo: ctx.cfg.bskyAppView,
-      }
+      };
   }
-}
+};
 
 const safeString = (str: unknown): string | undefined => {
-  return typeof str === 'string' ? str : undefined
-}
+  return typeof str === 'string' ? str : undefined;
+};
 
 function logResponseError(this: ServerResponse, err: unknown): void {
-  httpLogger.warn({ err }, 'error forwarding upstream response')
+  httpLogger.warn({ err }, 'error forwarding upstream response');
 }
 
 export class PipethroughUpstreamError extends XRPCServerError {
   readonly upstream: {
-    statusCode: number
-    headers: IncomingHttpHeaders
+    statusCode: number;
+    headers: IncomingHttpHeaders;
   };
 
   constructor(
     upstream: {
-      statusCode: number
-      headers: IncomingHttpHeaders
+      statusCode: number;
+      headers: IncomingHttpHeaders;
     },
     payload: { message?: string; error?: string },
     options?: ErrorOptions,
@@ -647,17 +651,17 @@ export class PipethroughUpstreamError extends XRPCServerError {
     const status =
       upstream.statusCode === 500
         ? ResponseType.UpstreamFailure
-        : upstream.statusCode
+        : upstream.statusCode;
 
-    super(status, payload.message, payload.error, options)
-    this.upstream = upstream
+    super(status, payload.message, payload.error, options);
+    this.upstream = upstream;
   }
 
   get headers(): Record<string, string> {
-    return Object.fromEntries(responseHeaders(this.upstream.headers, false))
+    return Object.fromEntries(responseHeaders(this.upstream.headers, false));
   }
 
   override get error() {
-    return this.customErrorName ?? this.typeName
+    return this.customErrorName ?? this.typeName;
   }
 }

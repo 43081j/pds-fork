@@ -1,13 +1,13 @@
-import { parseCid } from '@atproto/lex-data'
-import { WriteOpAction } from '@atproto/repo'
+import { parseCid } from '@atproto/lex-data';
+import { WriteOpAction } from '@atproto/repo';
 import {
   AuthRequiredError,
   InvalidRequestError,
   Server,
-} from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { dbLogger } from '../../../../logger.js'
+} from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
   InvalidRecordError,
@@ -15,25 +15,25 @@ import {
   prepareCreate,
   prepareDelete,
   prepareUpdate,
-} from '../../../../repo/index.js'
+} from '../../../../repo/index.js';
 
 const ratelimitPoints = ({
   input,
 }: {
-  input: com.atproto.repo.applyWrites.$Input
+  input: com.atproto.repo.applyWrites.$Input;
 }) => {
-  let points = 0
+  let points = 0;
   for (const op of input.body.writes) {
     if (com.atproto.repo.applyWrites.create.$isTypeOf(op)) {
-      points += 3
+      points += 3;
     } else if (com.atproto.repo.applyWrites.update.$isTypeOf(op)) {
-      points += 2
+      points += 2;
     } else {
-      points += 1
+      points += 1;
     }
   }
-  return points
-}
+  return points;
+};
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.repo.applyWrites, {
@@ -66,20 +66,20 @@ export default function (server: Server, ctx: AppContext) {
     ],
 
     handler: async ({ input, auth }) => {
-      const { repo, validate, swapCommit, writes } = input.body
+      const { repo, validate, swapCommit, writes } = input.body;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
         checkTakedown: true,
-      })
+      });
 
-      const did = account.did
+      const did = account.did;
       if (did !== auth.credentials.did) {
-        throw new AuthRequiredError()
+        throw new AuthRequiredError();
       }
 
       if (writes.length > 200) {
-        throw new InvalidRequestError('Too many writes. Max: 200')
+        throw new InvalidRequestError('Too many writes. Max: 200');
       }
 
       // Verify permission of every unique "action" / "collection" pair
@@ -112,13 +112,13 @@ export default function (server: Server, ctx: AppContext) {
           ],
         ] as const) {
           for (const collection of collections) {
-            auth.credentials.permissions.assertRepo({ action, collection })
+            auth.credentials.permissions.assertRepo({ action, collection });
           }
         }
       }
 
       // @NOTE should preserve order of ts.writes for final use in response
-      let preparedWrites: PreparedWrite[]
+      let preparedWrites: PreparedWrite[];
       try {
         preparedWrites = await Promise.all(
           writes.map(async (write, i) => {
@@ -130,7 +130,7 @@ export default function (server: Server, ctx: AppContext) {
                 rkey: write.rkey,
                 validate,
                 validationPath: ['writes', i, 'record'],
-              })
+              });
             } else if (com.atproto.repo.applyWrites.update.$isTypeOf(write)) {
               return prepareUpdate({
                 did,
@@ -139,43 +139,43 @@ export default function (server: Server, ctx: AppContext) {
                 rkey: write.rkey,
                 validate,
                 validationPath: ['writes', i, 'record'],
-              })
+              });
             } else if (com.atproto.repo.applyWrites.delete.$isTypeOf(write)) {
               return prepareDelete({
                 did,
                 collection: write.collection,
                 rkey: write.rkey,
-              })
+              });
             } else {
               throw new InvalidRequestError(
                 `Action not supported: ${write['$type']}`,
-              )
+              );
             }
           }),
-        )
+        );
       } catch (err) {
         if (err instanceof InvalidRecordError) {
-          throw new InvalidRequestError(err.message)
+          throw new InvalidRequestError(err.message);
         }
-        throw err
+        throw err;
       }
 
-      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined
+      const swapCommitCid = swapCommit ? parseCid(swapCommit) : undefined;
 
       const commit = await ctx.actorStore.transact(did, async (actorTxn) => {
         const commit = await actorTxn.repo
           .processWrites(preparedWrites, swapCommitCid)
           .catch((err) => {
             if (err instanceof BadCommitSwapError) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap')
+              throw new InvalidRequestError(err.message, 'InvalidSwap');
             } else {
-              throw err
+              throw err;
             }
-          })
+          });
 
-        await ctx.sequencer.sequenceCommit(did, commit)
-        return commit
-      })
+        await ctx.sequencer.sequenceCommit(did, commit);
+        return commit;
+      });
 
       await ctx.accountManager
         .updateRepoRoot(did, commit.cid, commit.rev)
@@ -183,8 +183,8 @@ export default function (server: Server, ctx: AppContext) {
           dbLogger.error(
             { err, did, cid: commit.cid, rev: commit.rev },
             'failed to update account root',
-          )
-        })
+          );
+        });
 
       return {
         encoding: 'application/json' as const,
@@ -195,9 +195,9 @@ export default function (server: Server, ctx: AppContext) {
           },
           results: preparedWrites.map(writeToOutputResult),
         },
-      }
+      };
     },
-  })
+  });
 }
 
 const writeToOutputResult = (write: PreparedWrite) => {
@@ -207,16 +207,16 @@ const writeToOutputResult = (write: PreparedWrite) => {
         cid: write.cid.toString(),
         uri: write.uri.toString(),
         validationStatus: write.validationStatus,
-      })
+      });
     case WriteOpAction.Update:
       return com.atproto.repo.applyWrites.updateResult.$build({
         cid: write.cid.toString(),
         uri: write.uri.toString(),
         validationStatus: write.validationStatus,
-      })
+      });
     case WriteOpAction.Delete:
-      return com.atproto.repo.applyWrites.deleteResult.$build({})
+      return com.atproto.repo.applyWrites.deleteResult.$build({});
     default:
-      throw new Error(`Unrecognized action: ${write}`)
+      throw new Error(`Unrecognized action: ${write}`);
   }
-}
+};

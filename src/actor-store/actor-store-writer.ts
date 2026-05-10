@@ -1,4 +1,4 @@
-import { ActorStoreTransactor } from './actor-store-transactor.js'
+import { ActorStoreTransactor } from './actor-store-transactor.js';
 
 export class ActorStoreWriter extends ActorStoreTransactor {
   async transact<T>(
@@ -10,8 +10,8 @@ export class ActorStoreWriter extends ActorStoreTransactor {
         dbTxn,
         this.keypair,
         this.resources,
-      )
-      return fn(transactor)
-    })
+      );
+      return fn(transactor);
+    });
   }
 }

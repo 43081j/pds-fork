@@ -1,6 +1,6 @@
-import { ForbiddenError, Server } from '@atproto/xrpc-server'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
+import { ForbiddenError, Server } from '@atproto/xrpc-server';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
 
 // THIS IS A TEMPORARY UNSPECCED ROUTE
 export default function (server: Server, ctx: AppContext) {
@@ -10,7 +10,7 @@ export default function (server: Server, ctx: AppContext) {
       authorize: () => {
         throw new ForbiddenError(
           'OAuth credentials are not supported for this endpoint',
-        )
+        );
       },
     }),
     handler: async ({ req }) => {
@@ -20,14 +20,14 @@ export default function (server: Server, ctx: AppContext) {
           body: {
             activated: true,
           },
-        }
+        };
       }
 
-      const { headers } = ctx.entrywayPassthruHeaders(req)
+      const { headers } = ctx.entrywayPassthruHeaders(req);
 
       return ctx.entrywayClient.xrpc(com.atproto.temp.checkSignupQueue, {
         headers,
-      })
+      });
     },
-  })
+  });
 }

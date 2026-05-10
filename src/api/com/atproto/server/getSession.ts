@@ -1,10 +1,10 @@
-import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax'
-import { InvalidRequestError, Server } from '@atproto/xrpc-server'
-import { formatAccountStatus } from '../../../../account-manager/account-manager.js'
-import { AccessOutput, OAuthOutput } from '../../../../auth-output.js'
-import { AppContext } from '../../../../context.js'
-import { com } from '../../../../lexicons.js'
-import { didDocForSession } from './util.js'
+import { DidString, HandleString, INVALID_HANDLE } from '@atproto/syntax';
+import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { formatAccountStatus } from '../../../../account-manager/account-manager.js';
+import { AccessOutput, OAuthOutput } from '../../../../auth-output.js';
+import { AppContext } from '../../../../context.js';
+import { com } from '../../../../lexicons.js';
+import { didDocForSession } from './util.js';
 
 export default function (server: Server, ctx: AppContext) {
   server.add(com.atproto.server.getSession, {
@@ -20,31 +20,31 @@ export default function (server: Server, ctx: AppContext) {
           req,
           auth.credentials.did,
           'com.atproto.server.getSession',
-        )
+        );
 
         const { body } = await ctx.entrywayClient.xrpc(
           com.atproto.server.getSession,
           { headers },
-        )
+        );
 
         return {
           encoding: 'application/json' as const,
           body: output(auth, body),
-        }
+        };
       }
 
-      const did = auth.credentials.did
+      const did = auth.credentials.did;
       const [user, didDoc] = await Promise.all([
         ctx.accountManager.getAccount(did, { includeDeactivated: true }),
         didDocForSession(ctx, did),
-      ])
+      ]);
       if (!user) {
         throw new InvalidRequestError(
           `Could not find user info for account: ${did}`,
-        )
+        );
       }
 
-      const { status, active } = formatAccountStatus(user)
+      const { status, active } = formatAccountStatus(user);
 
       return {
         encoding: 'application/json' as const,
@@ -57,9 +57,9 @@ export default function (server: Server, ctx: AppContext) {
           active,
           status,
         }),
-      }
+      };
     },
-  })
+  });
 }
 
 function output(
@@ -70,9 +70,9 @@ function output(
     credentials.type === 'oauth' &&
     !credentials.permissions.allowsAccount({ attr: 'email', action: 'read' })
   ) {
-    const { email, emailAuthFactor, emailConfirmed, ...rest } = data
-    return rest
+    const { email, emailAuthFactor, emailConfirmed, ...rest } = data;
+    return rest;
   }
 
-  return data
+  return data;
 }

@@ -1,6 +1,11 @@
-import { TID } from '@atproto/common'
-import { RecordSchema } from '@atproto/lex'
-import { encode } from '@atproto/lex-cbor'
+import { TID } from '@atproto/common';
+import { safeParse } from '@atcute/lexicons';
+import {
+  ObjectSchema,
+  RecordKeySchema,
+  RecordSchema,
+} from '@atcute/lexicons/validations';
+import { encode } from '@atproto/lex-cbor';
 import {
   Cid,
   LexMap,
@@ -9,23 +14,43 @@ import {
   cidForCbor,
   enumBlobRefs,
   isLegacyBlobRef,
-} from '@atproto/lex-data'
+} from '@atproto/lex-data';
 import {
   RecordCreateOp,
   RecordDeleteOp,
   RecordUpdateOp,
   RecordWriteOp,
   WriteOpAction,
-} from '@atproto/repo'
+} from '@atproto/repo';
 import {
   AtUri,
   DidString,
   NsidString,
   RecordKeyString,
   isValidRecordKey,
-} from '@atproto/syntax'
-import { hasExplicitSlur } from '../handle/explicit-slurs.js'
-import { app, chat, com } from '../lexicons.js'
+} from '@atproto/syntax';
+import { ComAtprotoLexiconSchema } from '@atcute/atproto';
+import { hasExplicitSlur } from '../handle/explicit-slurs.js';
+import {
+  AppBskyActorProfile,
+  AppBskyActorStatus,
+  AppBskyFeedGenerator,
+  AppBskyFeedLike,
+  AppBskyFeedPost,
+  AppBskyFeedPostgate,
+  AppBskyFeedRepost,
+  AppBskyFeedThreadgate,
+  AppBskyGraphBlock,
+  AppBskyGraphFollow,
+  AppBskyGraphList,
+  AppBskyGraphListblock,
+  AppBskyGraphListitem,
+  AppBskyGraphStarterpack,
+  AppBskyGraphVerification,
+  AppBskyLabelerService,
+  AppBskyNotificationDeclaration,
+  ChatBskyActorDeclaration,
+} from '@atcute/bluesky';
 import {
   InvalidRecordError,
   PreparedCreate,
@@ -33,89 +58,89 @@ import {
   PreparedUpdate,
   PreparedWrite,
   ValidationStatus,
-} from './types.js'
+} from './types.js';
+
+type KnownRecordSchema = RecordSchema<ObjectSchema, RecordKeySchema>;
 
 // @TODO replace this with automatically fetched (& built) schemas
-const knownSchemas = new Map<string, RecordSchema>(
-  [
-    app.bsky.actor.profile.main,
-    app.bsky.actor.status.main,
-    app.bsky.feed.generator.main,
-    app.bsky.feed.like.main,
-    app.bsky.feed.post.main,
-    app.bsky.feed.postgate.main,
-    app.bsky.feed.repost.main,
-    app.bsky.feed.threadgate.main,
-    app.bsky.graph.block.main,
-    app.bsky.graph.follow.main,
-    app.bsky.graph.list.main,
-    app.bsky.graph.listblock.main,
-    app.bsky.graph.listitem.main,
-    app.bsky.graph.starterpack.main,
-    app.bsky.graph.verification.main,
-    app.bsky.labeler.service.main,
-    app.bsky.notification.declaration.main,
-    chat.bsky.actor.declaration.main,
-    com.atproto.lexicon.schema.main,
-    com.germnetwork.declaration.main,
-  ].map((schema: RecordSchema) => [schema.$type, schema]),
-)
+const knownSchemas = new Map<string, KnownRecordSchema>(
+  (
+    [
+      AppBskyActorProfile.mainSchema,
+      AppBskyActorStatus.mainSchema,
+      AppBskyFeedGenerator.mainSchema,
+      AppBskyFeedLike.mainSchema,
+      AppBskyFeedPost.mainSchema,
+      AppBskyFeedPostgate.mainSchema,
+      AppBskyFeedRepost.mainSchema,
+      AppBskyFeedThreadgate.mainSchema,
+      AppBskyGraphBlock.mainSchema,
+      AppBskyGraphFollow.mainSchema,
+      AppBskyGraphList.mainSchema,
+      AppBskyGraphListblock.mainSchema,
+      AppBskyGraphListitem.mainSchema,
+      AppBskyGraphStarterpack.mainSchema,
+      AppBskyGraphVerification.mainSchema,
+      AppBskyLabelerService.mainSchema,
+      AppBskyNotificationDeclaration.mainSchema,
+      ChatBskyActorDeclaration.mainSchema,
+      ComAtprotoLexiconSchema.mainSchema,
+    ] satisfies KnownRecordSchema[]
+  ).map((schema) => [schema.object.shape.$type.expected, schema]),
+);
 
 const validateRecord = (
   record: TypedLexMap,
   rkey: RecordKeyString,
   opts: {
-    validate?: boolean
-    validationPath?: (string | number)[]
+    validate?: boolean;
   },
 ): undefined | ValidationStatus => {
   // If validation is explicitly disabled, skip it
   if (opts.validate === false) {
-    return undefined
+    return undefined;
   }
 
   // @TODO add support for lexicon resolution to fetch the schema dynamically
-  const schema = knownSchemas.get(record.$type)
+  const schema = knownSchemas.get(record.$type);
   if (!schema) {
     // If validation is explicitly requested, throw if unable to validate
     if (opts.validate === true) {
-      throw new InvalidRecordError(`Unknown lexicon type: ${record.$type}`)
+      throw new InvalidRecordError(`Unknown lexicon type: ${record.$type}`);
     } else {
-      return 'unknown'
+      return 'unknown';
     }
   }
 
-  const rkeyResult = schema.keySchema.safeValidate(rkey)
-  if (!rkeyResult.success) {
+  const rkeyResult = safeParse(schema.key, rkey);
+  if (!rkeyResult.ok) {
     throw new InvalidRecordError(
-      `Invalid record key for ${record.$type}: ${rkeyResult.reason.message}`,
-      { cause: rkeyResult.reason },
-    )
+      `Invalid record key for ${record.$type}: ${rkeyResult.message}`,
+      { cause: rkeyResult },
+    );
   }
 
-  const recordResult = schema.safeValidate(record, {
-    path: opts.validationPath ?? ['record'],
-  })
-  if (!recordResult.success) {
+  const recordResult = safeParse(schema, record);
+  if (!recordResult.ok) {
     throw new InvalidRecordError(
-      `Invalid ${record.$type} record: ${recordResult.reason.message}`,
-      { cause: recordResult.reason },
-    )
+      `Invalid ${record.$type} record: ${recordResult.message}`,
+      { cause: recordResult },
+    );
   }
 
-  return 'valid'
-}
+  return 'valid';
+};
 
 export const prepareCreate = async (opts: {
-  did: DidString
-  collection: NsidString
-  rkey?: RecordKeyString
-  swapCid?: Cid | null
-  record: LexMap
-  validate?: boolean
-  validationPath?: (string | number)[]
+  did: DidString;
+  collection: NsidString;
+  rkey?: RecordKeyString;
+  swapCid?: Cid | null;
+  record: LexMap;
+  validate?: boolean;
 }): Promise<PreparedCreate> => {
-  const { cid, uri, record, blobs, validationStatus } = await prepareWrite(opts)
+  const { cid, uri, record, blobs, validationStatus } =
+    await prepareWrite(opts);
 
   return {
     action: WriteOpAction.Create,
@@ -125,19 +150,19 @@ export const prepareCreate = async (opts: {
     record,
     blobs,
     validationStatus,
-  }
-}
+  };
+};
 
 export const prepareUpdate = async (opts: {
-  did: DidString
-  collection: NsidString
-  rkey: RecordKeyString
-  swapCid?: Cid | null
-  record: LexMap
-  validate?: boolean
-  validationPath?: (string | number)[]
+  did: DidString;
+  collection: NsidString;
+  rkey: RecordKeyString;
+  swapCid?: Cid | null;
+  record: LexMap;
+  validate?: boolean;
 }): Promise<PreparedUpdate> => {
-  const { cid, uri, record, blobs, validationStatus } = await prepareWrite(opts)
+  const { cid, uri, record, blobs, validationStatus } =
+    await prepareWrite(opts);
 
   return {
     action: WriteOpAction.Update,
@@ -147,48 +172,47 @@ export const prepareUpdate = async (opts: {
     record,
     blobs,
     validationStatus,
-  }
-}
+  };
+};
 
 async function prepareWrite(opts: {
-  did: string
-  collection: NsidString
-  rkey?: RecordKeyString
-  record: LexMap
-  validate?: boolean
-  validationPath?: (string | number)[]
+  did: string;
+  collection: NsidString;
+  rkey?: RecordKeyString;
+  record: LexMap;
+  validate?: boolean;
 }): Promise<{
-  record: TypedLexMap
-  blobs: TypedBlobRef[]
-  validationStatus?: ValidationStatus
-  uri: AtUri
-  cid: Cid
+  record: TypedLexMap;
+  blobs: TypedBlobRef[];
+  validationStatus?: ValidationStatus;
+  uri: AtUri;
+  cid: Cid;
 }> {
   const record: null | TypedLexMap =
     opts.record.$type === undefined
       ? { ...opts.record, $type: opts.collection }
       : opts.record.$type === opts.collection
         ? (opts.record as TypedLexMap)
-        : null
+        : null;
 
   if (!record) {
     throw new InvalidRecordError(
       `Invalid $type: expected ${opts.collection}, got ${opts.record.$type}`,
-    )
+    );
   }
 
   // @NOTE the rkey will be validated against the schema later
   if (opts.rkey != null) {
     if (!isValidRecordKey(opts.rkey)) {
-      throw new InvalidRecordError(`Invalid record key: ${opts.rkey}`)
+      throw new InvalidRecordError(`Invalid record key: ${opts.rkey}`);
     }
     if (hasExplicitSlur(opts.rkey)) {
-      throw new InvalidRecordError('Unacceptable slur in record key')
+      throw new InvalidRecordError('Unacceptable slur in record key');
     }
   }
 
-  const nextRkey = TID.next()
-  const rkey = opts.rkey || nextRkey.toString()
+  const nextRkey = TID.next();
+  const rkey = opts.rkey || nextRkey.toString();
 
   return {
     record,
@@ -208,59 +232,59 @@ async function prepareWrite(opts: {
         if (isLegacyBlobRef(blob)) {
           throw new InvalidRecordError(
             `Legacy blobs are not allowed (${blob.cid})`,
-          )
+          );
         }
-        return blob
+        return blob;
       },
     ),
     uri: AtUri.make(opts.did, opts.collection, rkey),
     cid: await cidForCbor(encode(record)),
-  }
+  };
 }
 
 export const prepareDelete = (opts: {
-  did: DidString
-  collection: NsidString
-  rkey: RecordKeyString
-  swapCid?: Cid | null
+  did: DidString;
+  collection: NsidString;
+  rkey: RecordKeyString;
+  swapCid?: Cid | null;
 }): PreparedDelete => {
-  const { did, collection, rkey, swapCid } = opts
+  const { did, collection, rkey, swapCid } = opts;
   return {
     action: WriteOpAction.Delete,
     uri: AtUri.make(did, collection, rkey),
     swapCid,
-  }
-}
+  };
+};
 
 export const createWriteToOp = (write: PreparedCreate): RecordCreateOp => ({
   action: WriteOpAction.Create,
   collection: write.uri.collectionSafe,
   rkey: write.uri.rkeySafe,
   record: write.record,
-})
+});
 
 export const updateWriteToOp = (write: PreparedUpdate): RecordUpdateOp => ({
   action: WriteOpAction.Update,
   collection: write.uri.collectionSafe,
   rkey: write.uri.rkeySafe,
   record: write.record,
-})
+});
 
 export const deleteWriteToOp = (write: PreparedDelete): RecordDeleteOp => ({
   action: WriteOpAction.Delete,
   collection: write.uri.collectionSafe,
   rkey: write.uri.rkeySafe,
-})
+});
 
 export const writeToOp = (write: PreparedWrite): RecordWriteOp => {
   switch (write.action) {
     case WriteOpAction.Create:
-      return createWriteToOp(write)
+      return createWriteToOp(write);
     case WriteOpAction.Update:
-      return updateWriteToOp(write)
+      return updateWriteToOp(write);
     case WriteOpAction.Delete:
-      return deleteWriteToOp(write)
+      return deleteWriteToOp(write);
     default:
-      throw new Error(`Unrecognized action: ${write}`)
+      throw new Error(`Unrecognized action: ${write}`);
   }
-}
+};

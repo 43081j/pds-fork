@@ -1,18 +1,18 @@
-import fsSync from 'node:fs'
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import stream from 'node:stream'
+import fsSync from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import stream from 'node:stream';
 import {
   aggregateErrors,
   chunkArray,
   fileExists,
   isErrnoException,
   rmIfExists,
-} from '@atproto/common'
-import { randomStr } from '@atproto/crypto'
-import { Cid } from '@atproto/lex-data'
-import { BlobNotFoundError, BlobStore } from '@atproto/repo'
-import { blobStoreLogger as log } from './logger.js'
+} from '@atproto/common';
+import { randomStr } from '@atproto/crypto';
+import { Cid } from '@atproto/lex-data';
+import { BlobNotFoundError, BlobStore } from '@atproto/repo';
+import { blobStoreLogger as log } from './logger.js';
 
 export class DiskBlobStore implements BlobStore {
   public did: string;
@@ -26,10 +26,10 @@ export class DiskBlobStore implements BlobStore {
     tmpLocation: string,
     quarantineLocation: string,
   ) {
-    this.did = did
-    this.location = location
-    this.tmpLocation = tmpLocation
-    this.quarantineLocation = quarantineLocation
+    this.did = did;
+    this.location = location;
+    this.tmpLocation = tmpLocation;
+    this.quarantineLocation = quarantineLocation;
   }
 
   static creator(
@@ -38,70 +38,71 @@ export class DiskBlobStore implements BlobStore {
     quarantineLocation?: string,
   ) {
     return (did: string) => {
-      const tmp = tmpLocation || path.join(location, 'tempt')
-      const quarantine = quarantineLocation || path.join(location, 'quarantine')
-      return new DiskBlobStore(did, location, tmp, quarantine)
-    }
+      const tmp = tmpLocation || path.join(location, 'tempt');
+      const quarantine =
+        quarantineLocation || path.join(location, 'quarantine');
+      return new DiskBlobStore(did, location, tmp, quarantine);
+    };
   }
 
   private async ensureDir() {
-    await fs.mkdir(path.join(this.location, this.did), { recursive: true })
+    await fs.mkdir(path.join(this.location, this.did), { recursive: true });
   }
 
   private async ensureTemp() {
-    await fs.mkdir(path.join(this.tmpLocation, this.did), { recursive: true })
+    await fs.mkdir(path.join(this.tmpLocation, this.did), { recursive: true });
   }
 
   private async ensureQuarantine() {
     await fs.mkdir(path.join(this.quarantineLocation, this.did), {
       recursive: true,
-    })
+    });
   }
 
   private genKey() {
-    return randomStr(32, 'base32')
+    return randomStr(32, 'base32');
   }
 
   getTmpPath(key: string): string {
-    return path.join(this.tmpLocation, this.did, key)
+    return path.join(this.tmpLocation, this.did, key);
   }
 
   getStoredPath(cid: Cid): string {
-    return path.join(this.location, this.did, cid.toString())
+    return path.join(this.location, this.did, cid.toString());
   }
 
   getQuarantinePath(cid: Cid): string {
-    return path.join(this.quarantineLocation, this.did, cid.toString())
+    return path.join(this.quarantineLocation, this.did, cid.toString());
   }
 
   async hasTemp(key: string): Promise<boolean> {
-    return fileExists(this.getTmpPath(key))
+    return fileExists(this.getTmpPath(key));
   }
 
   async hasStored(cid: Cid): Promise<boolean> {
-    return fileExists(this.getStoredPath(cid))
+    return fileExists(this.getStoredPath(cid));
   }
 
   async putTemp(bytes: Uint8Array | stream.Readable): Promise<string> {
-    await this.ensureTemp()
-    const key = this.genKey()
-    await fs.writeFile(this.getTmpPath(key), bytes)
-    return key
+    await this.ensureTemp();
+    const key = this.genKey();
+    await fs.writeFile(this.getTmpPath(key), bytes);
+    return key;
   }
 
   async makePermanent(key: string, cid: Cid): Promise<void> {
-    await this.ensureDir()
-    const tmpPath = this.getTmpPath(key)
-    const storedPath = this.getStoredPath(cid)
-    const alreadyHas = await this.hasStored(cid)
+    await this.ensureDir();
+    const tmpPath = this.getTmpPath(key);
+    const storedPath = this.getStoredPath(cid);
+    const alreadyHas = await this.hasStored(cid);
     if (!alreadyHas) {
-      const data = await fs.readFile(tmpPath)
-      await fs.writeFile(storedPath, data)
+      const data = await fs.readFile(tmpPath);
+      await fs.writeFile(storedPath, data);
     }
     try {
-      await fs.rm(tmpPath)
+      await fs.rm(tmpPath);
     } catch (err) {
-      log.error({ err, tmpPath }, 'could not delete file from temp storage')
+      log.error({ err, tmpPath }, 'could not delete file from temp storage');
     }
   }
 
@@ -109,74 +110,74 @@ export class DiskBlobStore implements BlobStore {
     cid: Cid,
     bytes: Uint8Array | stream.Readable,
   ): Promise<void> {
-    await this.ensureDir()
-    await fs.writeFile(this.getStoredPath(cid), bytes)
+    await this.ensureDir();
+    await fs.writeFile(this.getStoredPath(cid), bytes);
   }
 
   async quarantine(cid: Cid): Promise<void> {
-    await this.ensureQuarantine()
+    await this.ensureQuarantine();
     try {
-      await fs.rename(this.getStoredPath(cid), this.getQuarantinePath(cid))
+      await fs.rename(this.getStoredPath(cid), this.getQuarantinePath(cid));
     } catch (err) {
-      throw translateErr(err)
+      throw translateErr(err);
     }
   }
 
   async unquarantine(cid: Cid): Promise<void> {
-    await this.ensureDir()
+    await this.ensureDir();
     try {
-      await fs.rename(this.getQuarantinePath(cid), this.getStoredPath(cid))
+      await fs.rename(this.getQuarantinePath(cid), this.getStoredPath(cid));
     } catch (err) {
-      throw translateErr(err)
+      throw translateErr(err);
     }
   }
 
   async getBytes(cid: Cid): Promise<Uint8Array> {
     try {
-      return await fs.readFile(this.getStoredPath(cid))
+      return await fs.readFile(this.getStoredPath(cid));
     } catch (err) {
-      throw translateErr(err)
+      throw translateErr(err);
     }
   }
 
   async getStream(cid: Cid): Promise<stream.Readable> {
-    const path = this.getStoredPath(cid)
-    const exists = await fileExists(path)
+    const path = this.getStoredPath(cid);
+    const exists = await fileExists(path);
     if (!exists) {
-      throw new BlobNotFoundError()
+      throw new BlobNotFoundError();
     }
-    return fsSync.createReadStream(path)
+    return fsSync.createReadStream(path);
   }
 
   async delete(cid: Cid): Promise<void> {
-    await rmIfExists(this.getStoredPath(cid))
+    await rmIfExists(this.getStoredPath(cid));
   }
 
   async deleteMany(cids: Cid[]): Promise<void> {
-    const errors: unknown[] = []
+    const errors: unknown[] = [];
     for (const chunk of chunkArray(cids, 500)) {
       await Promise.all(
         chunk.map((cid) =>
           this.delete(cid).catch((err) => {
-            log.error({ err, cid: cid.toString() }, 'error deleting blob')
-            errors.push(err)
+            log.error({ err, cid: cid.toString() }, 'error deleting blob');
+            errors.push(err);
           }),
         ),
-      )
+      );
     }
-    if (errors.length) throw aggregateErrors(errors)
+    if (errors.length) throw aggregateErrors(errors);
   }
 
   async deleteAll(): Promise<void> {
-    await rmIfExists(path.join(this.location, this.did), true)
-    await rmIfExists(path.join(this.tmpLocation, this.did), true)
-    await rmIfExists(path.join(this.quarantineLocation, this.did), true)
+    await rmIfExists(path.join(this.location, this.did), true);
+    await rmIfExists(path.join(this.tmpLocation, this.did), true);
+    await rmIfExists(path.join(this.quarantineLocation, this.did), true);
   }
 }
 
 const translateErr = (err: unknown): BlobNotFoundError | unknown => {
   if (isErrnoException(err) && err.code === 'ENOENT') {
-    return new BlobNotFoundError()
+    return new BlobNotFoundError();
   }
-  return err
-}
+  return err;
+};

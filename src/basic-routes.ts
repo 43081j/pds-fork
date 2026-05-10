@@ -1,12 +1,12 @@
-import { Router } from 'express'
-import { sql } from 'kysely'
-import { AppContext } from './context.js'
+import { Router } from 'express';
+import { sql } from 'kysely';
+import { AppContext } from './context.js';
 
 export const createRouter = (ctx: AppContext): Router => {
-  const router = Router()
+  const router = Router();
 
   router.get('/', function (_req, res) {
-    res.type('text/plain')
+    res.type('text/plain');
     res.send(`
          __                         __
         /\\ \\__                     /\\ \\__
@@ -26,27 +26,27 @@ Most API routes are under /xrpc/
       Code: https://github.com/bluesky-social/atproto
  Self-Host: https://github.com/bluesky-social/pds
   Protocol: https://atproto.com
-`)
-  })
+`);
+  });
 
   router.get('/robots.txt', function (_req, res) {
-    res.type('text/plain')
+    res.type('text/plain');
     res.send(
       '# Hello!\n\n# Crawling the public API is allowed\nUser-agent: *\nAllow: /',
-    )
-  })
+    );
+  });
 
   router.get('/xrpc/_health', async function (req, res) {
-    const { version } = ctx.cfg.service
+    const { version } = ctx.cfg.service;
     try {
-      await sql`select 1`.execute(ctx.accountManager.db.db)
+      await sql`select 1`.execute(ctx.accountManager.db.db);
     } catch (err) {
-      req.log.error({ err }, 'failed health check')
-      res.status(503).send({ version, error: 'Service Unavailable' })
-      return
+      req.log.error({ err }, 'failed health check');
+      res.status(503).send({ version, error: 'Service Unavailable' });
+      return;
     }
-    res.send({ version })
-  })
+    res.send({ version });
+  });
 
-  return router
-}
+  return router;
+};

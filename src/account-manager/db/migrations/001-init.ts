@@ -1,4 +1,4 @@
-import { Kysely, sql } from 'kysely'
+import { Kysely, sql } from 'kysely';
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -8,7 +8,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('passwordScrypt', 'varchar', (col) => col.notNull())
     .addColumn('createdAt', 'varchar', (col) => col.notNull())
     .addPrimaryKeyConstraint('app_password_pkey', ['did', 'name'])
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('invite_code')
@@ -18,12 +18,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('forAccount', 'varchar', (col) => col.notNull())
     .addColumn('createdBy', 'varchar', (col) => col.notNull())
     .addColumn('createdAt', 'varchar', (col) => col.notNull())
-    .execute()
+    .execute();
   await db.schema
     .createIndex('invite_code_for_account_idx')
     .on('invite_code')
     .column('forAccount')
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('invite_code_use')
@@ -31,7 +31,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('usedBy', 'varchar', (col) => col.notNull())
     .addColumn('usedAt', 'varchar', (col) => col.notNull())
     .addPrimaryKeyConstraint(`invite_code_use_pkey`, ['code', 'usedBy'])
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('refresh_token')
@@ -40,12 +40,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('expiresAt', 'varchar', (col) => col.notNull())
     .addColumn('nextId', 'varchar')
     .addColumn('appPasswordName', 'varchar')
-    .execute()
+    .execute();
   await db.schema // Aids in refresh token cleanup
     .createIndex('refresh_token_did_idx')
     .on('refresh_token')
     .column('did')
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('repo_root')
@@ -53,7 +53,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('cid', 'varchar', (col) => col.notNull())
     .addColumn('rev', 'varchar', (col) => col.notNull())
     .addColumn('indexedAt', 'varchar', (col) => col.notNull())
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('actor')
@@ -61,18 +61,18 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('handle', 'varchar')
     .addColumn('createdAt', 'varchar', (col) => col.notNull())
     .addColumn('takedownRef', 'varchar')
-    .execute()
+    .execute();
   await db.schema
     .createIndex(`actor_handle_lower_idx`)
     .unique()
     .on('actor')
     .expression(sql`lower("handle")`)
-    .execute()
+    .execute();
   await db.schema
     .createIndex('actor_cursor_idx')
     .on('actor')
     .columns(['createdAt', 'did'])
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('account')
@@ -81,13 +81,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('passwordScrypt', 'varchar', (col) => col.notNull())
     .addColumn('emailConfirmedAt', 'varchar')
     .addColumn('invitesDisabled', 'int2', (col) => col.notNull().defaultTo(0))
-    .execute()
+    .execute();
   await db.schema
     .createIndex(`account_email_lower_idx`)
     .unique()
     .on('account')
     .expression(sql`lower("email")`)
-    .execute()
+    .execute();
 
   await db.schema
     .createTable('email_token')
@@ -100,16 +100,16 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       'purpose',
       'token',
     ])
-    .execute()
+    .execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('email_token').execute()
-  await db.schema.dropTable('account').execute()
-  await db.schema.dropTable('actor').execute()
-  await db.schema.dropTable('repo_root').execute()
-  await db.schema.dropTable('refresh_token').execute()
-  await db.schema.dropTable('invite_code_use').execute()
-  await db.schema.dropTable('invite_code').execute()
-  await db.schema.dropTable('app_password').execute()
+  await db.schema.dropTable('email_token').execute();
+  await db.schema.dropTable('account').execute();
+  await db.schema.dropTable('actor').execute();
+  await db.schema.dropTable('repo_root').execute();
+  await db.schema.dropTable('refresh_token').execute();
+  await db.schema.dropTable('invite_code_use').execute();
+  await db.schema.dropTable('invite_code').execute();
+  await db.schema.dropTable('app_password').execute();
 }

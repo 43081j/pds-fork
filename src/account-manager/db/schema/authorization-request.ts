@@ -1,4 +1,4 @@
-import { Selectable } from 'kysely'
+import { Selectable } from 'kysely';
 import {
   ClientAuth,
   ClientAuthLegacy,
@@ -7,23 +7,23 @@ import {
   OAuthAuthorizationRequestParameters,
   OAuthClientId,
   RequestId,
-} from '@atproto/oauth-provider'
-import { DateISO, JsonEncoded } from '../../../db/index.js'
+} from '@atproto/oauth-provider';
+import { DateISO, JsonEncoded } from '../../../db/index.js';
 
 export interface AuthorizationRequest {
-  id: RequestId
-  did: string | null
-  deviceId: DeviceId | null
+  id: RequestId;
+  did: string | null;
+  deviceId: DeviceId | null;
 
-  clientId: OAuthClientId
-  clientAuth: JsonEncoded<null | ClientAuth | ClientAuthLegacy>
-  parameters: JsonEncoded<OAuthAuthorizationRequestParameters>
-  expiresAt: DateISO
-  code: Code | null
+  clientId: OAuthClientId;
+  clientAuth: JsonEncoded<null | ClientAuth | ClientAuthLegacy>;
+  parameters: JsonEncoded<OAuthAuthorizationRequestParameters>;
+  expiresAt: DateISO;
+  code: Code | null;
 }
 
-export type AuthorizationRequestEntry = Selectable<AuthorizationRequest>
+export type AuthorizationRequestEntry = Selectable<AuthorizationRequest>;
 
-export const tableName = 'authorization_request'
+export const tableName = 'authorization_request';
 
-export type PartialDB = { [tableName]: AuthorizationRequest }
+export type PartialDB = { [tableName]: AuthorizationRequest };
