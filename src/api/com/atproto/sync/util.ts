@@ -1,7 +1,7 @@
+import { InvalidRequestError } from '@atcute/xrpc-server';
 import { AtIdentifierString } from '@atproto/syntax';
-import { InvalidRequestError } from '@atproto/xrpc-server';
 import { ActorAccount } from '../../../../account-manager/helpers/account.js';
-import { AppContext } from '../../../../context.js';
+import type { AppContext } from '../../../../context.js';
 
 export const assertRepoAvailability = async (
   ctx: AppContext,
@@ -13,25 +13,25 @@ export const assertRepoAvailability = async (
     includeTakenDown: true,
   });
   if (!account) {
-    throw new InvalidRequestError(
-      `Could not find repo for DID: ${handleOrDid}`,
-      'RepoNotFound',
-    );
+    throw new InvalidRequestError({
+      error: 'RepoNotFound',
+      message: `Could not find repo for DID: ${handleOrDid}`,
+    });
   }
   if (isAdminOrSelf) {
     return account;
   }
   if (account.takedownRef) {
-    throw new InvalidRequestError(
-      `Repo has been takendown: ${handleOrDid}`,
-      'RepoTakendown',
-    );
+    throw new InvalidRequestError({
+      error: 'RepoTakendown',
+      message: `Repo has been takendown: ${handleOrDid}`,
+    });
   }
   if (account.deactivatedAt) {
-    throw new InvalidRequestError(
-      `Repo has been deactivated: ${handleOrDid}`,
-      'RepoDeactivated',
-    );
+    throw new InvalidRequestError({
+      error: 'RepoDeactivated',
+      message: `Repo has been deactivated: ${handleOrDid}`,
+    });
   }
   return account;
 };
