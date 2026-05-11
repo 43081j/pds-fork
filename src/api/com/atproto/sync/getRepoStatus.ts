@@ -1,11 +1,14 @@
-import { Server } from '@atproto/xrpc-server';
+import { ComAtprotoSyncGetRepoStatus } from '@atcute/atproto';
+import { type XrpcQueryHandlerOptions, json } from '@atcute/xrpc-server';
 import { formatAccountStatus } from '../../../../account-manager/account-manager.js';
-import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
+import type { AppContext } from '../../../../context.js';
 import { assertRepoAvailability } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.sync.getRepoStatus, {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoSyncGetRepoStatus.mainSchema> {
+  return {
+    lxm: ComAtprotoSyncGetRepoStatus.mainSchema,
     handler: async ({ params }) => {
       const { did } = params;
       const account = await assertRepoAvailability(ctx, did, true);
@@ -20,15 +23,12 @@ export default function (server: Server, ctx: AppContext) {
         rev = root.rev;
       }
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
-          did,
-          active,
-          status,
-          rev,
-        },
-      };
+      return json({
+        did,
+        active,
+        status,
+        rev,
+      });
     },
-  });
+  };
 }
