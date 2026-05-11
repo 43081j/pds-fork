@@ -1,20 +1,35 @@
+import { Readable } from 'node:stream';
+import { ComAtprotoSyncGetBlocks } from '@atcute/atproto';
+import {
+  type XrpcQueryHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { byteIterableToStream } from '@atproto/common';
 import { parseCid } from '@atproto/lex-data';
 import { blocksToCarStream } from '@atproto/repo';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { isUserOrAdmin } from '../../../../auth-verifier.js';
-import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
+import type { AppContext } from '../../../../context.js';
 import { assertRepoAvailability } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.sync.getBlocks, {
-    auth: ctx.authVerifier.authorizationOrAdminTokenOptional({
-      authorize: () => {
-        // always allow
-      },
-    }),
-    handler: async ({ params, auth }) => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoSyncGetBlocks.mainSchema> {
+  const verifier = ctx.authVerifier.authorizationOrAdminTokenOptional({
+    authorize: () => {
+      // always allow
+    },
+  });
+
+  return {
+    lxm: ComAtprotoSyncGetBlocks.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const { did } = params;
       await assertRepoAvailability(ctx, did, isUserOrAdmin(auth, did));
 
@@ -24,14 +39,17 @@ export default function (server: Server, ctx: AppContext) {
       );
       if (got.missing.length > 0) {
         const missingStr = got.missing.map((c) => c.toString());
-        throw new InvalidRequestError(`Could not find cids: ${missingStr}`);
+        throw new InvalidRequestError({
+          message: `Could not find cids: ${missingStr}`,
+        });
       }
       const car = blocksToCarStream(null, got.blocks);
 
-      return {
-        encoding: 'application/vnd.ipld.car' as const,
-        body: byteIterableToStream(car),
-      };
+      responseHeaders.set('content-type', 'application/vnd.ipld.car');
+      const body = Readable.toWeb(
+        byteIterableToStream(car),
+      ) as ReadableStream<Uint8Array>;
+      return new Response(body, { headers: responseHeaders });
     },
-  });
+  };
 }
