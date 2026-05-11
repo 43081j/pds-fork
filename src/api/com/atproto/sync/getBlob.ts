@@ -7,7 +7,7 @@ import {
 import { parseCid } from '@atproto/lex-data';
 import { BlobNotFoundError } from '@atproto/repo';
 import { isUserOrAdmin } from '../../../../auth-verifier.js';
-import { AppContext } from '../../../../context.js';
+import type { AppContext } from '../../../../context.js';
 import { assertRepoAvailability } from './util.js';
 
 export default function (
