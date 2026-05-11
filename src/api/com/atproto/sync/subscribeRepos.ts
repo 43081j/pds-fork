@@ -1,16 +1,20 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
-import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
+import { ComAtprotoSyncSubscribeRepos } from '@atcute/atproto';
+import {
+  type SubscriptionConfig,
+  XRPCSubscriptionError,
+} from '@atcute/xrpc-server';
+import type { AppContext } from '../../../../context.js';
 import { httpLogger } from '../../../../logger.js';
 import { Outbox } from '../../../../sequencer/outbox.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(
-    com.atproto.sync.subscribeRepos,
-    async function* ({
-      params,
-      signal,
-    }): AsyncGenerator<com.atproto.sync.subscribeRepos.$Message> {
+type SubscribeReposHandlerOptions = {
+  lxm: ComAtprotoSyncSubscribeRepos.mainSchema;
+} & SubscriptionConfig<ComAtprotoSyncSubscribeRepos.mainSchema>;
+
+export default function (ctx: AppContext): SubscribeReposHandlerOptions {
+  return {
+    lxm: ComAtprotoSyncSubscribeRepos.mainSchema,
+    handler: async function* ({ params, signal }) {
       const { cursor } = params;
       const outbox = new Outbox(ctx.sequencer, {
         maxBufferSize: ctx.cfg.subscription.maxBuffer,
@@ -27,16 +31,17 @@ export default function (server: Server, ctx: AppContext) {
           ctx.sequencer.curr(),
         ]);
         if (cursor > (curr ?? 0)) {
-          throw new InvalidRequestError(
-            'Cursor in the future.',
-            'FutureCursor',
-          );
+          throw new XRPCSubscriptionError({
+            error: 'FutureCursor',
+            message: 'Cursor in the future.',
+          });
         } else if (next && next.sequencedAt < backfillTime) {
           // if cursor is before backfill time, find earliest cursor from backfill window
-          yield com.atproto.sync.subscribeRepos.info.$build({
+          yield {
+            $type: 'com.atproto.sync.subscribeRepos#info',
             name: 'OutdatedCursor',
             message: 'Requested cursor exceeded limit. Possibly missing events',
-          });
+          } satisfies ComAtprotoSyncSubscribeRepos.Info;
           const startEvt = await ctx.sequencer.earliestAfterTime(backfillTime);
           outboxCursor = startEvt?.seq ? startEvt.seq - 1 : undefined;
         } else {
@@ -46,31 +51,35 @@ export default function (server: Server, ctx: AppContext) {
 
       for await (const evt of outbox.events(outboxCursor, signal)) {
         if (evt.type === 'commit') {
-          yield com.atproto.sync.subscribeRepos.commit.$build({
+          yield {
+            $type: 'com.atproto.sync.subscribeRepos#commit',
             seq: evt.seq,
             time: evt.time,
             ...evt.evt,
-          });
+          } satisfies ComAtprotoSyncSubscribeRepos.Commit;
         } else if (evt.type === 'sync') {
-          yield com.atproto.sync.subscribeRepos.sync.$build({
+          yield {
+            $type: 'com.atproto.sync.subscribeRepos#sync',
             seq: evt.seq,
             time: evt.time,
             ...evt.evt,
-          });
+          } satisfies ComAtprotoSyncSubscribeRepos.Sync;
         } else if (evt.type === 'identity') {
-          yield com.atproto.sync.subscribeRepos.identity.$build({
+          yield {
+            $type: 'com.atproto.sync.subscribeRepos#identity',
             seq: evt.seq,
             time: evt.time,
             ...evt.evt,
-          });
+          } satisfies ComAtprotoSyncSubscribeRepos.Identity;
         } else if (evt.type === 'account') {
-          yield com.atproto.sync.subscribeRepos.account.$build({
+          yield {
+            $type: 'com.atproto.sync.subscribeRepos#account',
             seq: evt.seq,
             time: evt.time,
             ...evt.evt,
-          });
+          } satisfies ComAtprotoSyncSubscribeRepos.Account;
         }
       }
     },
-  );
+  };
 }
