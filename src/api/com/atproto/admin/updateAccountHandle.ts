@@ -1,15 +1,25 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminUpdateAccountHandle } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { httpLogger } from '../../../../logger.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.updateAccountHandle, {
-    auth: ctx.authVerifier.adminToken,
-    handler: async ({ input }) => {
-      const { did } = input.body;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoAdminUpdateAccountHandle.mainSchema> {
+  const adminToken = ctx.authVerifier.adminToken;
+
+  return {
+    lxm: ComAtprotoAdminUpdateAccountHandle.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await adminToken({ request, responseHeaders, params: {} });
+
+      const { did } = input;
       const handle = await ctx.accountManager.normalizeAndValidateHandle(
-        input.body.handle,
+        input.handle,
         {
           did,
           allowAnyValid: true,
@@ -24,7 +34,9 @@ export default function (server: Server, ctx: AppContext) {
 
       if (account) {
         if (account.did !== did) {
-          throw new InvalidRequestError(`Handle already taken: ${handle}`);
+          throw new InvalidRequestError({
+            message: `Handle already taken: ${handle}`,
+          });
         }
       } else {
         if (ctx.cfg.entryway) {
@@ -35,7 +47,9 @@ export default function (server: Server, ctx: AppContext) {
             .resolveAtprotoData(did, true)
             .catch(() => undefined);
           if (doc?.handle !== handle) {
-            throw new InvalidRequestError('Handle does not match DID doc');
+            throw new InvalidRequestError({
+              message: 'Handle does not match DID doc',
+            });
           }
         } else {
           await ctx.plcClient.updateHandle(did, ctx.plcRotationKey, handle);
@@ -51,6 +65,8 @@ export default function (server: Server, ctx: AppContext) {
           'failed to sequence handle update',
         );
       }
+
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }

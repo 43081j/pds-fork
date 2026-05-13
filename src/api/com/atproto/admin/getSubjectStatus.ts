@@ -1,20 +1,33 @@
+import { ComAtprotoAdminGetSubjectStatus } from '@atcute/atproto';
+import {
+  type XrpcQueryHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { parseCid } from '@atproto/lex-data';
 import { AtUri } from '@atproto/syntax';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.getSubjectStatus, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({ params }) => {
+type OutputBody = ComAtprotoAdminGetSubjectStatus.$output;
+
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoAdminGetSubjectStatus.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
+
+  return {
+    lxm: ComAtprotoAdminGetSubjectStatus.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params });
+
       const { did, uri, blob } = params;
-      let body: com.atproto.admin.getSubjectStatus.$OutputBody | null = null;
+      let body: OutputBody | null = null;
       if (blob) {
         if (!did) {
-          throw new InvalidRequestError(
-            'Must provide a did to request blob state',
-          );
+          throw new InvalidRequestError({
+            message: 'Must provide a did to request blob state',
+          });
         }
         const takedown = await ctx.actorStore.read(did, (store) =>
           store.repo.blob.getBlobTakedownStatus(parseCid(blob)),
@@ -23,7 +36,7 @@ export default function (server: Server, ctx: AppContext) {
           body = {
             subject: {
               $type: 'com.atproto.admin.defs#repoBlobRef',
-              did: did,
+              did,
               cid: blob,
             },
             takedown,
@@ -55,22 +68,22 @@ export default function (server: Server, ctx: AppContext) {
           body = {
             subject: {
               $type: 'com.atproto.admin.defs#repoRef',
-              did: did,
+              did,
             },
             takedown: status.takedown,
             deactivated: status.deactivated,
           };
         }
       } else {
-        throw new InvalidRequestError('No provided subject');
+        throw new InvalidRequestError({ message: 'No provided subject' });
       }
       if (body === null) {
-        throw new InvalidRequestError('Subject not found', 'NotFound');
+        throw new InvalidRequestError({
+          message: 'Subject not found',
+          error: 'NotFound',
+        });
       }
-      return {
-        encoding: 'application/json' as const,
-        body,
-      };
+      return json(body, { headers: responseHeaders });
     },
-  });
+  };
 }

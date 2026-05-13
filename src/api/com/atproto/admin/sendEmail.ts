@@ -1,36 +1,53 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminSendEmail } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.sendEmail, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({ input: { body }, req }) => {
-      const { content, recipientDid, subject = 'Message via your PDS' } = body;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoAdminSendEmail.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
+
+  return {
+    lxm: ComAtprotoAdminSendEmail.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params: {} });
+
+      const { content, recipientDid, subject = 'Message via your PDS' } = input;
 
       const account = await ctx.accountManager.getAccount(recipientDid, {
         includeDeactivated: true,
         includeTakenDown: true,
       });
       if (!account) {
-        throw new InvalidRequestError('Recipient not found');
+        throw new InvalidRequestError({ message: 'Recipient not found' });
       }
 
       if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           recipientDid,
-          com.atproto.admin.sendEmail.$lxm,
+          'com.atproto.admin.sendEmail',
         );
 
-        return ctx.entrywayClient.xrpc(com.atproto.admin.sendEmail, {
-          headers,
-          body,
-        });
+        const body = await ensureOk(
+          ctx.entrywayClient.post('com.atproto.admin.sendEmail', {
+            headers,
+            input,
+          }),
+        );
+        return json(body, { headers: responseHeaders });
       }
 
       if (!account.email) {
-        throw new InvalidRequestError('account does not have an email address');
+        throw new InvalidRequestError({
+          message: 'account does not have an email address',
+        });
       }
 
       await ctx.moderationMailer.send(
@@ -38,10 +55,7 @@ export default function (server: Server, ctx: AppContext) {
         { subject, to: account.email },
       );
 
-      return {
-        encoding: 'application/json' as const,
-        body: { sent: true },
-      };
+      return json({ sent: true }, { headers: responseHeaders });
     },
-  });
+  };
 }

@@ -1,32 +1,8 @@
-import express from 'express';
-import { l } from '@atproto/lex';
+import { ComAtprotoAdminDefs } from '@atcute/atproto';
+import { Did, Datetime, Handle } from '@atcute/lexicons/syntax';
 import { INVALID_HANDLE } from '@atproto/syntax';
 import { ActorAccount } from '../../../../account-manager/helpers/account.js';
 import { CodeDetail } from '../../../../account-manager/helpers/invite.js';
-import { com } from '../../../../lexicons.js';
-
-// Output designed to passed as second arg to AtpAgent methods.
-// The encoding field here is a quirk of the AtpAgent.
-export function authPassthru(
-  req: express.Request,
-  withEncoding?: false,
-): { headers: { authorization: string }; encoding: undefined } | undefined;
-
-export function authPassthru(
-  req: express.Request,
-  withEncoding: true,
-):
-  | { headers: { authorization: string }; encoding: 'application/json' }
-  | undefined;
-
-export function authPassthru(req: express.Request, withEncoding?: boolean) {
-  if (req.headers.authorization) {
-    return {
-      headers: { authorization: req.headers.authorization },
-      encoding: withEncoding ? 'application/json' : undefined,
-    };
-  }
-}
 
 export function formatAccountInfo(
   account: ActorAccount,
@@ -39,7 +15,7 @@ export function formatAccountInfo(
     invites: Map<string, CodeDetail[]> | CodeDetail[];
     invitedBy: Record<string, CodeDetail>;
   },
-): com.atproto.admin.defs.AccountView {
+): ComAtprotoAdminDefs.AccountView {
   let invitesResults: CodeDetail[] | undefined;
   if (managesOwnInvites) {
     if (Array.isArray(invites)) {
@@ -49,18 +25,17 @@ export function formatAccountInfo(
     }
   }
   return {
-    did: account.did as l.DidString,
-    handle: (account.handle ?? INVALID_HANDLE) as l.HandleString,
+    did: account.did as Did,
+    handle: (account.handle ?? INVALID_HANDLE) as Handle,
     email: account.email ?? undefined,
-    indexedAt: account.createdAt as l.DatetimeString,
+    indexedAt: account.createdAt as Datetime,
     emailConfirmedAt:
-      (account.emailConfirmedAt as l.DatetimeString | undefined) ?? undefined,
+      (account.emailConfirmedAt as Datetime | undefined) ?? undefined,
     invitedBy: managesOwnInvites ? invitedBy[account.did] : undefined,
     invites: invitesResults,
     invitesDisabled: managesOwnInvites
       ? account.invitesDisabled === 1
       : undefined,
-    deactivatedAt:
-      (account.deactivatedAt as l.DatetimeString | undefined) ?? undefined,
+    deactivatedAt: (account.deactivatedAt as Datetime | undefined) ?? undefined,
   };
 }

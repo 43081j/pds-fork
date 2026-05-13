@@ -1,23 +1,34 @@
+import { ComAtprotoAdminUpdateSubjectStatus } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { parseCid } from '@atproto/lex-data';
 import { AtUri } from '@atproto/syntax';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.updateSubjectStatus, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({ input }) => {
-      const { subject, takedown, deactivated } = input.body;
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoAdminUpdateSubjectStatus.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
+
+  return {
+    lxm: ComAtprotoAdminUpdateSubjectStatus.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params: {} });
+
+      const { subject, takedown, deactivated } = input;
       if (takedown) {
-        if (com.atproto.admin.defs.repoRef.$isTypeOf(subject)) {
+        if (subject.$type === 'com.atproto.admin.defs#repoRef') {
           await ctx.accountManager.takedownAccount(subject.did, takedown);
-        } else if (com.atproto.repo.strongRef.$isTypeOf(subject)) {
+        } else if (subject.$type === 'com.atproto.repo.strongRef') {
           const uri = new AtUri(subject.uri);
           await ctx.actorStore.transact(uri.hostname, async (store) => {
             await store.record.updateRecordTakedownStatus(uri, takedown);
           });
-        } else if (com.atproto.admin.defs.repoBlobRef.$isTypeOf(subject)) {
+        } else if (subject.$type === 'com.atproto.admin.defs#repoBlobRef') {
           await ctx.actorStore.transact(subject.did, async (store) => {
             await store.repo.blob.updateBlobTakedownStatus(
               parseCid(subject.cid),
@@ -25,12 +36,14 @@ export default function (server: Server, ctx: AppContext) {
             );
           });
         } else {
-          throw new InvalidRequestError(`Invalid subject (${subject.$type})`);
+          throw new InvalidRequestError({
+            message: `Invalid subject (${(subject as { $type: string }).$type})`,
+          });
         }
       }
 
       if (deactivated) {
-        if (com.atproto.admin.defs.repoRef.$isTypeOf(subject)) {
+        if (subject.$type === 'com.atproto.admin.defs#repoRef') {
           if (deactivated.applied) {
             await ctx.accountManager.deactivateAccount(subject.did, null);
           } else {
@@ -39,18 +52,12 @@ export default function (server: Server, ctx: AppContext) {
         }
       }
 
-      if (com.atproto.admin.defs.repoRef.$isTypeOf(subject)) {
+      if (subject.$type === 'com.atproto.admin.defs#repoRef') {
         const status = await ctx.accountManager.getAccountStatus(subject.did);
         await ctx.sequencer.sequenceAccountEvt(subject.did, status);
       }
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
-          subject,
-          takedown,
-        },
-      };
+      return json({ subject, takedown }, { headers: responseHeaders });
     },
-  });
+  };
 }

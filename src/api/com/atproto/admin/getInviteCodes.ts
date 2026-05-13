@@ -1,4 +1,9 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminGetInviteCodes } from '@atcute/atproto';
+import {
+  type XrpcQueryHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import {
   CodeDetail,
   selectInviteCodesQb,
@@ -10,23 +15,24 @@ import {
   LabeledResult,
   paginate,
 } from '../../../../db/pagination.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  if (ctx.cfg.entryway) {
-    server.add(com.atproto.admin.getInviteCodes, () => {
-      throw new InvalidRequestError(
-        'Account invites are managed by the entryway service',
-      );
-    });
-    return;
-  }
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoAdminGetInviteCodes.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
 
-  server.add(com.atproto.admin.getInviteCodes, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({
-      params,
-    }): Promise<com.atproto.admin.getInviteCodes.$Output> => {
+  return {
+    lxm: ComAtprotoAdminGetInviteCodes.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params });
+
+      if (ctx.cfg.entryway) {
+        throw new InvalidRequestError({
+          message: 'Account invites are managed by the entryway service',
+        });
+      }
+
       const { sort, limit, cursor } = params;
       const db = ctx.accountManager.db;
       const keyset = createKeyset(ctx, sort);
@@ -52,15 +58,15 @@ export default function (server: Server, ctx: AppContext) {
         }),
       );
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           cursor: resultCursor,
           codes: codeDetails,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }
 
 function createKeyset(ctx: AppContext, sort?: string): GenericKeyset<any, any> {
@@ -74,7 +80,7 @@ function createKeyset(ctx: AppContext, sort?: string): GenericKeyset<any, any> {
     return new UseCodeKeyset(ref('uses'), ref('code'));
   }
 
-  throw new InvalidRequestError(`unknown sort method: ${sort}`);
+  throw new InvalidRequestError({ message: `unknown sort method: ${sort}` });
 }
 
 type TimeCodeResult = { createdAt: string; code: string };
@@ -92,7 +98,7 @@ export class TimeCodeKeyset extends GenericKeyset<TimeCodeResult, Cursor> {
   cursorToLabeledResult(cursor: Cursor) {
     const primaryDate = new Date(parseInt(cursor.primary, 10));
     if (isNaN(primaryDate.getTime())) {
-      throw new InvalidRequestError('Malformed cursor');
+      throw new InvalidRequestError({ message: 'Malformed cursor' });
     }
     return {
       primary: primaryDate.toISOString(),
@@ -116,7 +122,7 @@ export class UseCodeKeyset extends GenericKeyset<UseCodeResult, LabeledResult> {
   cursorToLabeledResult(cursor: Cursor) {
     const primaryCode = parseInt(cursor.primary, 10);
     if (isNaN(primaryCode)) {
-      throw new InvalidRequestError('Malformed cursor');
+      throw new InvalidRequestError({ message: 'Malformed cursor' });
     }
     return {
       primary: primaryCode,

@@ -1,12 +1,19 @@
-import { Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminGetAccountInfos } from '@atcute/atproto';
+import { type XrpcQueryHandlerOptions, json } from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { formatAccountInfo } from './util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.getAccountInfos, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({ params }) => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoAdminGetAccountInfos.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
+
+  return {
+    lxm: ComAtprotoAdminGetAccountInfos.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params });
+
       const [accounts, invites, invitedBy] = await Promise.all([
         ctx.accountManager.getAccounts(params.dids, {
           includeDeactivated: true,
@@ -25,10 +32,7 @@ export default function (server: Server, ctx: AppContext) {
         });
       });
 
-      return {
-        encoding: 'application/json' as const,
-        body: { infos },
-      };
+      return json({ infos }, { headers: responseHeaders });
     },
-  });
+  };
 }

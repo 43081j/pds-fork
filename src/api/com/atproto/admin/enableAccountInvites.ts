@@ -1,18 +1,30 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminEnableAccountInvites } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.admin.enableAccountInvites, {
-    auth: ctx.authVerifier.moderator,
-    handler: async ({ input }) => {
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoAdminEnableAccountInvites.mainSchema> {
+  const verifier = ctx.authVerifier.moderator;
+
+  return {
+    lxm: ComAtprotoAdminEnableAccountInvites.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await verifier({ request, responseHeaders, params: {} });
+
       if (ctx.cfg.entryway) {
-        throw new InvalidRequestError(
-          'Account invites are managed by the entryway service',
-        );
+        throw new InvalidRequestError({
+          message: 'Account invites are managed by the entryway service',
+        });
       }
-      const { account } = input.body;
+      const { account } = input;
       await ctx.accountManager.setAccountInvitesDisabled(account, false);
+
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }

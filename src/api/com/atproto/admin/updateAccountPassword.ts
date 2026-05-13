@@ -1,34 +1,45 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoAdminUpdateAccountPassword } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { NEW_PASSWORD_MAX_LENGTH } from '../../../../account-manager/helpers/scrypt.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoAdminUpdateAccountPassword.mainSchema> {
+  const adminToken = ctx.authVerifier.adminToken;
   const { entrywayClient } = ctx;
 
-  if (entrywayClient) {
-    server.add(com.atproto.admin.updateAccountPassword, {
-      auth: ctx.authVerifier.adminToken,
-      handler: async ({ input: { body }, req }) => {
-        const { headers } = ctx.entrywayPassthruHeaders(req);
-        await entrywayClient.xrpc(com.atproto.admin.updateAccountPassword, {
-          body,
-          headers,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.admin.updateAccountPassword, {
-      auth: ctx.authVerifier.adminToken,
-      handler: async ({ input: { body } }) => {
-        const { did, password } = body;
+  return {
+    lxm: ComAtprotoAdminUpdateAccountPassword.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      await adminToken({ request, responseHeaders, params: {} });
 
-        if (password.length > NEW_PASSWORD_MAX_LENGTH) {
-          throw new InvalidRequestError('Invalid password length.');
-        }
+      if (entrywayClient) {
+        const { headers } = ctx.entrywayPassthruHeaders(request);
+        await ensureOk(
+          entrywayClient.post('com.atproto.admin.updateAccountPassword', {
+            input,
+            headers,
+            as: null,
+          }),
+        );
+        return new Response(null, { status: 200, headers: responseHeaders });
+      }
 
-        await ctx.accountManager.updateAccountPassword({ did, password });
-      },
-    });
-  }
+      const { did, password } = input;
+
+      if (password.length > NEW_PASSWORD_MAX_LENGTH) {
+        throw new InvalidRequestError({ message: 'Invalid password length.' });
+      }
+
+      await ctx.accountManager.updateAccountPassword({ did, password });
+
+      return new Response(null, { status: 200, headers: responseHeaders });
+    },
+  };
 }
