@@ -1,43 +1,59 @@
 import * as plc from '@did-plc/lib';
+import { ComAtprotoIdentitySubmitPlcOperation } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { check } from '@atproto/common';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { httpLogger as log } from '../../../../logger.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.identity.submitPlcOperation, {
-    auth: ctx.authVerifier.authorization({
-      authorize: (permissions) => {
-        permissions.assertIdentity({ attr: '*' });
-      },
-    }),
-    handler: async ({ auth, input }) => {
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoIdentitySubmitPlcOperation.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: (permissions) => {
+      permissions.assertIdentity({ attr: '*' });
+    },
+  });
+
+  return {
+    lxm: ComAtprotoIdentitySubmitPlcOperation.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const requester = auth.credentials.did;
-      const op = input.body.operation;
+      const op = input.operation;
 
       if (!check.is(op, plc.def.operation)) {
-        throw new InvalidRequestError('Invalid operation');
+        throw new InvalidRequestError({ message: 'Invalid operation' });
       }
 
       const rotationKey =
         ctx.cfg.entryway?.plcRotationKey ?? ctx.plcRotationKey.did();
       if (!op.rotationKeys.includes(rotationKey)) {
-        throw new InvalidRequestError(
-          "Rotation keys do not include server's rotation key",
-        );
+        throw new InvalidRequestError({
+          message: "Rotation keys do not include server's rotation key",
+        });
       }
       if (op.services['atproto_pds']?.type !== 'AtprotoPersonalDataServer') {
-        throw new InvalidRequestError('Incorrect type on atproto_pds service');
+        throw new InvalidRequestError({
+          message: 'Incorrect type on atproto_pds service',
+        });
       }
       if (op.services['atproto_pds']?.endpoint !== ctx.cfg.service.publicUrl) {
-        throw new InvalidRequestError(
-          'Incorrect endpoint on atproto_pds service',
-        );
+        throw new InvalidRequestError({
+          message: 'Incorrect endpoint on atproto_pds service',
+        });
       }
       const signingKey = await ctx.actorStore.keypair(requester);
       if (op.verificationMethods['atproto'] !== signingKey.did()) {
-        throw new InvalidRequestError('Incorrect signing key');
+        throw new InvalidRequestError({ message: 'Incorrect signing key' });
       }
       const account = await ctx.accountManager.getAccount(requester, {
         includeDeactivated: true,
@@ -46,7 +62,9 @@ export default function (server: Server, ctx: AppContext) {
         account?.handle &&
         op.alsoKnownAs.at(0) !== `at://${account.handle}`
       ) {
-        throw new InvalidRequestError('Incorrect handle in alsoKnownAs');
+        throw new InvalidRequestError({
+          message: 'Incorrect handle in alsoKnownAs',
+        });
       }
 
       await ctx.plcClient.sendOperation(requester, op);
@@ -60,6 +78,8 @@ export default function (server: Server, ctx: AppContext) {
           'failed to refresh did after plc update',
         );
       }
+
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }

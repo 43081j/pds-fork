@@ -1,12 +1,16 @@
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
+import { ComAtprotoIdentityRequestPlcOperationSignature } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { ACCESS_FULL } from '../../../../auth-scope.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
-
-  const auth = ctx.authVerifier.authorization({
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoIdentityRequestPlcOperationSignature.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
     // @NOTE Reflect any change in signPlcOperation
     scopes: ACCESS_FULL,
     additional: ['com.atproto.takendown'],
@@ -15,45 +19,49 @@ export default function (server: Server, ctx: AppContext) {
     },
   });
 
-  if (entrywayClient) {
-    // @TODO we should have a higher level way of defining these "passthrough"
-    // handlers
-    server.add(com.atproto.identity.requestPlcOperationSignature, {
-      auth,
-      handler: async ({ auth, req }) => {
+  return {
+    lxm: ComAtprotoIdentityRequestPlcOperationSignature.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           auth.credentials.did,
-          com.atproto.identity.requestPlcOperationSignature.$lxm,
+          'com.atproto.identity.requestPlcOperationSignature',
         );
-        await entrywayClient.xrpc(
-          com.atproto.identity.requestPlcOperationSignature,
-          { headers },
+        await ensureOk(
+          ctx.entrywayClient.post(
+            'com.atproto.identity.requestPlcOperationSignature',
+            { headers, as: null },
+          ),
         );
-      },
-    });
-  } else {
-    server.add(com.atproto.identity.requestPlcOperationSignature, {
-      auth,
-      handler: async ({ auth }) => {
+      } else {
         const did = auth.credentials.did;
         const account = await ctx.accountManager.getAccount(did, {
           includeDeactivated: true,
           includeTakenDown: true,
         });
         if (!account) {
-          throw new InvalidRequestError('account not found');
+          throw new InvalidRequestError({ message: 'account not found' });
         } else if (!account.email) {
-          throw new InvalidRequestError(
-            'account does not have an email address',
-          );
+          throw new InvalidRequestError({
+            message: 'account does not have an email address',
+          });
         }
         const token = await ctx.accountManager.createEmailToken(
           did,
           'plc_operation',
         );
         await ctx.mailer.sendPlcOperation({ token }, { to: account.email });
-      },
-    });
-  }
+      }
+
+      return new Response(null, { status: 200, headers: responseHeaders });
+    },
+  };
 }

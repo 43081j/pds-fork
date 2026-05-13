@@ -1,14 +1,19 @@
 import * as plc from '@did-plc/lib';
+import { ComAtprotoIdentitySignPlcOperation } from '@atcute/atproto';
+import { ok as ensureOk } from '@atcute/client';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { check } from '@atproto/common';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { ACCESS_FULL } from '../../../../auth-scope.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  const { entrywayClient } = ctx;
-
-  const auth = ctx.authVerifier.authorization({
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoIdentitySignPlcOperation.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
     // @NOTE Should match auth rules from requestPlcOperationSignature
     scopes: ACCESS_FULL,
     additional: ['com.atproto.takendown'],
@@ -17,69 +22,71 @@ export default function (server: Server, ctx: AppContext) {
     },
   });
 
-  if (entrywayClient) {
-    server.add(com.atproto.identity.signPlcOperation, {
-      auth,
-      handler: async ({ auth, input: { body }, req }) => {
+  return {
+    lxm: ComAtprotoIdentitySignPlcOperation.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      if (ctx.entrywayClient) {
         const { headers } = await ctx.entrywayAuthHeaders(
-          req,
+          request,
           auth.credentials.did,
-          com.atproto.identity.signPlcOperation.$lxm,
+          'com.atproto.identity.signPlcOperation',
         );
 
-        return entrywayClient.xrpc(com.atproto.identity.signPlcOperation, {
-          headers,
-          body,
-        });
-      },
-    });
-  } else {
-    server.add(com.atproto.identity.signPlcOperation, {
-      auth,
-      handler: async ({ auth, input }) => {
-        const did = auth.credentials.did;
-        const { token } = input.body;
-        if (!token) {
-          throw new InvalidRequestError(
-            'email confirmation token required to sign PLC operations',
-          );
-        }
-        await ctx.accountManager.assertValidEmailTokenAndCleanup(
-          did,
-          'plc_operation',
-          token,
-        );
-
-        const lastOp = await ctx.plcClient.getLastOp(did);
-        if (check.is(lastOp, plc.def.tombstone)) {
-          throw new InvalidRequestError('Did is tombstoned');
-        }
-        const operation = await plc.createUpdateOp(
-          lastOp,
-          ctx.plcRotationKey,
-          (lastOp) => ({
-            ...lastOp,
-            rotationKeys: input.body.rotationKeys ?? lastOp.rotationKeys,
-            alsoKnownAs: input.body.alsoKnownAs ?? lastOp.alsoKnownAs,
-            verificationMethods:
-              // @TODO: actually validate instead of type casting
-              (input.body.verificationMethods as
-                | undefined
-                | Record<string, string>) ?? lastOp.verificationMethods,
-            services:
-              // @TODO: actually validate instead of type casting
-              (input.body.services as
-                | undefined
-                | Record<string, { type: string; endpoint: string }>) ??
-              lastOp.services,
+        const result = await ensureOk(
+          ctx.entrywayClient.post('com.atproto.identity.signPlcOperation', {
+            headers,
+            input,
           }),
         );
 
-        return {
-          encoding: 'application/json' as const,
-          body: { operation },
-        };
-      },
-    });
-  }
+        return json(result, { headers: responseHeaders });
+      }
+
+      const did = auth.credentials.did;
+      const { token } = input;
+      if (!token) {
+        throw new InvalidRequestError({
+          message: 'email confirmation token required to sign PLC operations',
+        });
+      }
+      await ctx.accountManager.assertValidEmailTokenAndCleanup(
+        did,
+        'plc_operation',
+        token,
+      );
+
+      const lastOp = await ctx.plcClient.getLastOp(did);
+      if (check.is(lastOp, plc.def.tombstone)) {
+        throw new InvalidRequestError({ message: 'Did is tombstoned' });
+      }
+      const operation = await plc.createUpdateOp(
+        lastOp,
+        ctx.plcRotationKey,
+        (lastOp) => ({
+          ...lastOp,
+          rotationKeys: input.rotationKeys ?? lastOp.rotationKeys,
+          alsoKnownAs: input.alsoKnownAs ?? lastOp.alsoKnownAs,
+          verificationMethods:
+            // @TODO: actually validate instead of type casting
+            (input.verificationMethods as undefined | Record<string, string>) ??
+            lastOp.verificationMethods,
+          services:
+            // @TODO: actually validate instead of type casting
+            (input.services as
+              | undefined
+              | Record<string, { type: string; endpoint: string }>) ??
+            lastOp.services,
+        }),
+      );
+
+      return json({ operation }, { headers: responseHeaders });
+    },
+  };
 }

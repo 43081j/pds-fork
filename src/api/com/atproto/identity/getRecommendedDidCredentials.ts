@@ -1,15 +1,26 @@
-import { Server } from '@atproto/xrpc-server';
+import { ComAtprotoIdentityGetRecommendedDidCredentials } from '@atcute/atproto';
+import { type XrpcQueryHandlerOptions, json } from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.identity.getRecommendedDidCredentials, {
-    auth: ctx.authVerifier.authorization({
-      authorize: () => {
-        // always allow
-      },
-    }),
-    handler: async ({ auth }) => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoIdentityGetRecommendedDidCredentials.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // always allow
+    },
+  });
+
+  return {
+    lxm: ComAtprotoIdentityGetRecommendedDidCredentials.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const requester = auth.credentials.did;
       const signingKey = await ctx.actorStore.keypair(requester);
       const verificationMethods = {
@@ -36,15 +47,15 @@ export default function (server: Server, ctx: AppContext) {
         },
       };
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           alsoKnownAs,
           verificationMethods,
           rotationKeys,
           services,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }
