@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { ComAtprotoRepoUploadBlob } from '@atcute/atproto';
+import type { Cid as CidString } from '@atcute/lexicons/syntax';
 import {
   type XrpcProcedureHandlerOptions,
   InvalidRequestError,
@@ -41,7 +42,7 @@ export default function (
         request.body as Parameters<typeof Readable.fromWeb>[0],
       );
 
-      const blob = await ctx.actorStore.writeNoTransaction(
+      const blobRef = await ctx.actorStore.writeNoTransaction(
         requester,
         async (store) => {
           const metadata = await store.repo.blob
@@ -49,20 +50,29 @@ export default function (
             .catch(throwAbortAsUpstreamError);
 
           return store.transact(async (actorTxn) => {
-            const blobRef =
-              await actorTxn.repo.blob.trackUntetheredBlob(metadata);
+            const ref = await actorTxn.repo.blob.trackUntetheredBlob(metadata);
 
             // make the blob permanent if an associated record is already indexed
-            if (await actorTxn.repo.blob.hasRecordsForBlob(blobRef.ref)) {
-              await actorTxn.repo.blob.verifyBlobAndMakePermanent(blobRef);
+            if (await actorTxn.repo.blob.hasRecordsForBlob(ref.ref)) {
+              await actorTxn.repo.blob.verifyBlobAndMakePermanent(ref);
             }
 
-            return blobRef;
+            return ref;
           });
         },
       );
 
-      return json({ blob }, { headers: responseHeaders });
+      return json(
+        {
+          blob: {
+            $type: 'blob',
+            mimeType: blobRef.mimeType,
+            ref: { $link: blobRef.ref.toString() as CidString },
+            size: blobRef.size,
+          },
+        },
+        { headers: responseHeaders },
+      );
     },
   };
 }
@@ -73,7 +83,8 @@ function parseRequestEncoding(request: Request): string {
     throw new InvalidRequestError({ message: 'Missing content-type header' });
   }
   // strip parameters (e.g. "; charset=utf-8")
-  return contentType.split(';')[0].trim();
+  const [mime] = contentType.split(';');
+  return (mime ?? contentType).trim();
 }
 
 function throwAbortAsUpstreamError(err: unknown): never {

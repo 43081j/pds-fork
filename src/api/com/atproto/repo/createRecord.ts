@@ -5,7 +5,7 @@ import {
   InvalidRequestError,
   json,
 } from '@atcute/xrpc-server';
-import { parseCid } from '@atproto/lex-data';
+import { isLexMap, parseCid } from '@atproto/lex-data';
 import { InvalidRecordKeyError } from '@atproto/syntax';
 import { AppContext } from '../../../../context.js';
 import { dbLogger } from '../../../../logger.js';
@@ -61,6 +61,12 @@ export default function (
         auth.credentials.permissions.assertRepo({
           action: 'create',
           collection,
+        });
+      }
+
+      if (!isLexMap(record)) {
+        throw new InvalidRequestError({
+          message: 'record must be an object',
         });
       }
 

@@ -10,6 +10,7 @@ import {
   LexMap,
   TypedBlobRef,
   isLegacyBlobRef,
+  isLexMap,
   parseCid,
 } from '@atproto/lex-data';
 import { AtUri } from '@atproto/syntax';
@@ -76,6 +77,12 @@ export default function (
         auth.credentials.permissions.assertRepo({
           action: 'update',
           collection,
+        });
+      }
+
+      if (!isLexMap(record)) {
+        throw new InvalidRequestError({
+          message: 'record must be an object',
         });
       }
 

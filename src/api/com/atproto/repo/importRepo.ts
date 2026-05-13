@@ -59,7 +59,8 @@ export default function (
       // @NOTE process as much as we can before the transaction, in particular
       // the reading of the body stream.
       const { roots, blocks } = await readCarStream(bodyStream);
-      if (roots.length !== 1) {
+      const [root] = roots;
+      if (roots.length !== 1 || !root) {
         await blocks.dump();
         throw new InvalidRequestError({ message: 'expected one root' });
       }
@@ -78,7 +79,7 @@ export default function (
         const diff = await verifyDiff(
           currRepo,
           blockMap,
-          roots[0],
+          root,
           undefined,
           undefined,
           { ensureLeaves: false },

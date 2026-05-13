@@ -1,11 +1,12 @@
 import { ComAtprotoRepoApplyWrites } from '@atcute/atproto';
+import type { ResourceUri } from '@atcute/lexicons/syntax';
 import {
   type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
   json,
 } from '@atcute/xrpc-server';
-import { parseCid } from '@atproto/lex-data';
+import { isLexMap, parseCid } from '@atproto/lex-data';
 import { WriteOpAction } from '@atproto/repo';
 import { AppContext } from '../../../../context.js';
 import { dbLogger } from '../../../../logger.js';
@@ -93,22 +94,30 @@ export default function (
         preparedWrites = await Promise.all(
           writes.map(async (write, i) => {
             if (isCreate(write)) {
+              if (!isLexMap(write.value)) {
+                throw new InvalidRequestError({
+                  message: `writes/${i}/value must be a record object`,
+                });
+              }
               return prepareCreate({
                 did,
                 collection: write.collection,
                 record: write.value,
                 rkey: write.rkey,
                 validate,
-                validationPath: ['writes', i, 'record'],
               });
             } else if (isUpdate(write)) {
+              if (!isLexMap(write.value)) {
+                throw new InvalidRequestError({
+                  message: `writes/${i}/value must be a record object`,
+                });
+              }
               return prepareUpdate({
                 did,
                 collection: write.collection,
                 record: write.value,
                 rkey: write.rkey,
                 validate,
-                validationPath: ['writes', i, 'record'],
               });
             } else if (isDelete(write)) {
               return prepareDelete({
@@ -172,10 +181,9 @@ export default function (
   };
 }
 
-type WriteResult =
-  | ComAtprotoRepoApplyWrites.CreateResult
-  | ComAtprotoRepoApplyWrites.UpdateResult
-  | ComAtprotoRepoApplyWrites.DeleteResult;
+type WriteResult = NonNullable<
+  ComAtprotoRepoApplyWrites.$output['results']
+>[number];
 
 const writeToOutputResult = (write: PreparedWrite): WriteResult => {
   switch (write.action) {
@@ -183,14 +191,14 @@ const writeToOutputResult = (write: PreparedWrite): WriteResult => {
       return {
         $type: 'com.atproto.repo.applyWrites#createResult',
         cid: write.cid.toString(),
-        uri: write.uri.toString(),
+        uri: write.uri.toString() as ResourceUri,
         validationStatus: write.validationStatus,
       };
     case WriteOpAction.Update:
       return {
         $type: 'com.atproto.repo.applyWrites#updateResult',
         cid: write.cid.toString(),
-        uri: write.uri.toString(),
+        uri: write.uri.toString() as ResourceUri,
         validationStatus: write.validationStatus,
       };
     case WriteOpAction.Delete:
