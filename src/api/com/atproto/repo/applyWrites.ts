@@ -1,12 +1,13 @@
-import { parseCid } from '@atproto/lex-data';
-import { WriteOpAction } from '@atproto/repo';
+import { ComAtprotoRepoApplyWrites } from '@atcute/atproto';
 import {
+  type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
+import { parseCid } from '@atproto/lex-data';
+import { WriteOpAction } from '@atproto/repo';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
@@ -17,56 +18,46 @@ import {
   prepareUpdate,
 } from '../../../../repo/index.js';
 
-const ratelimitPoints = ({
-  input,
-}: {
-  input: com.atproto.repo.applyWrites.$Input;
-}) => {
-  let points = 0;
-  for (const op of input.body.writes) {
-    if (com.atproto.repo.applyWrites.create.$isTypeOf(op)) {
-      points += 3;
-    } else if (com.atproto.repo.applyWrites.update.$isTypeOf(op)) {
-      points += 2;
-    } else {
-      points += 1;
-    }
-  }
-  return points;
-};
+type ApplyWritesInput = ComAtprotoRepoApplyWrites.$input;
+type WriteOp = ApplyWritesInput['writes'][number];
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.applyWrites, {
-    auth: ctx.authVerifier.authorization({
-      // @NOTE the "checkTakedown" and "checkDeactivated" checks are typically
-      // performed during auth. However, since this method's "repo" parameter
-      // can be a handle, we will need to fetch the account again to ensure that
-      // the handle matches the DID from the request's credentials. In order to
-      // avoid fetching the account twice (during auth, and then again in the
-      // controller), the checks are disabled here:
+const isCreate = (
+  op: WriteOp,
+): op is Extract<WriteOp, { $type?: 'com.atproto.repo.applyWrites#create' }> =>
+  op.$type === 'com.atproto.repo.applyWrites#create';
+const isUpdate = (
+  op: WriteOp,
+): op is Extract<WriteOp, { $type?: 'com.atproto.repo.applyWrites#update' }> =>
+  op.$type === 'com.atproto.repo.applyWrites#update';
+const isDelete = (
+  op: WriteOp,
+): op is Extract<WriteOp, { $type?: 'com.atproto.repo.applyWrites#delete' }> =>
+  op.$type === 'com.atproto.repo.applyWrites#delete';
 
-      // checkTakedown: true,
-      // checkDeactivated: true,
-      authorize: () => {
-        // Performed in the handler as it is based on the request body
-      },
-    }),
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoApplyWrites.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // Performed in the handler as it is based on the request body
+    },
+  });
 
-    rateLimit: [
-      {
-        name: 'repo-write-hour',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: ratelimitPoints,
-      },
-      {
-        name: 'repo-write-day',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: ratelimitPoints,
-      },
-    ],
+  // TODO: re-add repo-write-hour / repo-write-day rate limits as router-level
+  // middleware once XRPCRouter is wired up. calcPoints depends on op kind
+  // (create=3, update=2, delete=1).
 
-    handler: async ({ input, auth }) => {
-      const { repo, validate, swapCommit, writes } = input.body;
+  return {
+    lxm: ComAtprotoRepoApplyWrites.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      const { repo, validate, swapCommit, writes } = input;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
@@ -79,37 +70,16 @@ export default function (server: Server, ctx: AppContext) {
       }
 
       if (writes.length > 200) {
-        throw new InvalidRequestError('Too many writes. Max: 200');
+        throw new InvalidRequestError({ message: 'Too many writes. Max: 200' });
       }
 
       // Verify permission of every unique "action" / "collection" pair
       if (auth.credentials.type === 'oauth') {
         // @NOTE Unlike "importRepo", we do not require "action" = "*" here.
         for (const [action, collections] of [
-          [
-            'create',
-            new Set(
-              writes
-                .filter((v) => com.atproto.repo.applyWrites.create.$isTypeOf(v))
-                .map((w) => w.collection),
-            ),
-          ],
-          [
-            'update',
-            new Set(
-              writes
-                .filter((v) => com.atproto.repo.applyWrites.update.$isTypeOf(v))
-                .map((w) => w.collection),
-            ),
-          ],
-          [
-            'delete',
-            new Set(
-              writes
-                .filter((v) => com.atproto.repo.applyWrites.delete.$isTypeOf(v))
-                .map((w) => w.collection),
-            ),
-          ],
+          ['create', new Set(writes.filter(isCreate).map((w) => w.collection))],
+          ['update', new Set(writes.filter(isUpdate).map((w) => w.collection))],
+          ['delete', new Set(writes.filter(isDelete).map((w) => w.collection))],
         ] as const) {
           for (const collection of collections) {
             auth.credentials.permissions.assertRepo({ action, collection });
@@ -122,7 +92,7 @@ export default function (server: Server, ctx: AppContext) {
       try {
         preparedWrites = await Promise.all(
           writes.map(async (write, i) => {
-            if (com.atproto.repo.applyWrites.create.$isTypeOf(write)) {
+            if (isCreate(write)) {
               return prepareCreate({
                 did,
                 collection: write.collection,
@@ -131,7 +101,7 @@ export default function (server: Server, ctx: AppContext) {
                 validate,
                 validationPath: ['writes', i, 'record'],
               });
-            } else if (com.atproto.repo.applyWrites.update.$isTypeOf(write)) {
+            } else if (isUpdate(write)) {
               return prepareUpdate({
                 did,
                 collection: write.collection,
@@ -140,22 +110,22 @@ export default function (server: Server, ctx: AppContext) {
                 validate,
                 validationPath: ['writes', i, 'record'],
               });
-            } else if (com.atproto.repo.applyWrites.delete.$isTypeOf(write)) {
+            } else if (isDelete(write)) {
               return prepareDelete({
                 did,
                 collection: write.collection,
                 rkey: write.rkey,
               });
             } else {
-              throw new InvalidRequestError(
-                `Action not supported: ${write['$type']}`,
-              );
+              throw new InvalidRequestError({
+                message: `Action not supported: ${(write as { $type?: string })['$type']}`,
+              });
             }
           }),
         );
       } catch (err) {
         if (err instanceof InvalidRecordError) {
-          throw new InvalidRequestError(err.message);
+          throw new InvalidRequestError({ message: err.message });
         }
         throw err;
       }
@@ -167,10 +137,12 @@ export default function (server: Server, ctx: AppContext) {
           .processWrites(preparedWrites, swapCommitCid)
           .catch((err) => {
             if (err instanceof BadCommitSwapError) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap');
-            } else {
-              throw err;
+              throw new InvalidRequestError({
+                message: err.message,
+                error: 'InvalidSwap',
+              });
             }
+            throw err;
           });
 
         await ctx.sequencer.sequenceCommit(did, commit);
@@ -186,36 +158,45 @@ export default function (server: Server, ctx: AppContext) {
           );
         });
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           commit: {
             cid: commit.cid.toString(),
             rev: commit.rev,
           },
           results: preparedWrites.map(writeToOutputResult),
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }
 
-const writeToOutputResult = (write: PreparedWrite) => {
+type WriteResult =
+  | ComAtprotoRepoApplyWrites.CreateResult
+  | ComAtprotoRepoApplyWrites.UpdateResult
+  | ComAtprotoRepoApplyWrites.DeleteResult;
+
+const writeToOutputResult = (write: PreparedWrite): WriteResult => {
   switch (write.action) {
     case WriteOpAction.Create:
-      return com.atproto.repo.applyWrites.createResult.$build({
+      return {
+        $type: 'com.atproto.repo.applyWrites#createResult',
         cid: write.cid.toString(),
         uri: write.uri.toString(),
         validationStatus: write.validationStatus,
-      });
+      };
     case WriteOpAction.Update:
-      return com.atproto.repo.applyWrites.updateResult.$build({
+      return {
+        $type: 'com.atproto.repo.applyWrites#updateResult',
         cid: write.cid.toString(),
         uri: write.uri.toString(),
         validationStatus: write.validationStatus,
-      });
+      };
     case WriteOpAction.Delete:
-      return com.atproto.repo.applyWrites.deleteResult.$build({});
+      return {
+        $type: 'com.atproto.repo.applyWrites#deleteResult',
+      };
     default:
       throw new Error(`Unrecognized action: ${write}`);
   }

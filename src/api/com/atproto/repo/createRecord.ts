@@ -1,12 +1,13 @@
-import { parseCid } from '@atproto/lex-data';
-import { InvalidRecordKeyError } from '@atproto/syntax';
+import { ComAtprotoRepoCreateRecord } from '@atcute/atproto';
 import {
+  type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
+import { parseCid } from '@atproto/lex-data';
+import { InvalidRecordKeyError } from '@atproto/syntax';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
@@ -16,37 +17,35 @@ import {
   prepareDelete,
 } from '../../../../repo/index.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.createRecord, {
-    auth: ctx.authVerifier.authorization({
-      // @NOTE the "checkTakedown" and "checkDeactivated" checks are typically
-      // performed during auth. However, since this method's "repo" parameter
-      // can be a handle, we will need to fetch the account again to ensure that
-      // the handle matches the DID from the request's credentials. In order to
-      // avoid fetching the account twice (during auth, and then again in the
-      // controller), the checks are disabled here:
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoCreateRecord.mainSchema> {
+  // @NOTE the "checkTakedown" and "checkDeactivated" checks are typically
+  // performed during auth. However, since this method's "repo" parameter
+  // can be a handle, we will need to fetch the account again to ensure that
+  // the handle matches the DID from the request's credentials. In order to
+  // avoid fetching the account twice (during auth, and then again in the
+  // controller), the checks are disabled here.
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // Performed in the handler as it requires the request body
+    },
+  });
 
-      // checkTakedown: true,
-      // checkDeactivated: true,
-      authorize: () => {
-        // Performed in the handler as it requires the request body
-      },
-    }),
-    rateLimit: [
-      {
-        name: 'repo-write-hour',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 3,
-      },
-      {
-        name: 'repo-write-day',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 3,
-      },
-    ],
-    handler: async ({ input, auth }) => {
-      const { repo, collection, rkey, record, swapCommit, validate } =
-        input.body;
+  // TODO: re-add repo-write-hour / repo-write-day rate limits as router-level
+  // middleware once XRPCRouter is wired up. calcPoints: 3.
+
+  return {
+    lxm: ComAtprotoRepoCreateRecord.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      const { repo, collection, rkey, record, swapCommit, validate } = input;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
@@ -78,10 +77,10 @@ export default function (server: Server, ctx: AppContext) {
         });
       } catch (err) {
         if (err instanceof InvalidRecordError) {
-          throw new InvalidRequestError(err.message);
+          throw new InvalidRequestError({ message: err.message });
         }
         if (err instanceof InvalidRecordKeyError) {
-          throw new InvalidRequestError(err.message);
+          throw new InvalidRequestError({ message: err.message });
         }
         throw err;
       }
@@ -106,7 +105,10 @@ export default function (server: Server, ctx: AppContext) {
           .processWrites(writes, swapCommitCid)
           .catch((err) => {
             if (err instanceof BadCommitSwapError) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap');
+              throw new InvalidRequestError({
+                message: err.message,
+                error: 'InvalidSwap',
+              });
             }
             throw err;
           });
@@ -123,9 +125,8 @@ export default function (server: Server, ctx: AppContext) {
           );
         });
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           uri: write.uri.toString(),
           cid: write.cid.toString(),
           commit: {
@@ -134,7 +135,8 @@ export default function (server: Server, ctx: AppContext) {
           },
           validationStatus: write.validationStatus,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }

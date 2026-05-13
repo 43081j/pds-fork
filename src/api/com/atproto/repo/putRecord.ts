@@ -1,3 +1,10 @@
+import { ComAtprotoRepoPutRecord } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  AuthRequiredError,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import {
   LegacyBlobRef,
   LexMap,
@@ -6,14 +13,8 @@ import {
   parseCid,
 } from '@atproto/lex-data';
 import { AtUri } from '@atproto/syntax';
-import {
-  AuthRequiredError,
-  InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
 import { ActorStoreTransactor } from '../../../../actor-store/actor-store-transactor.js';
 import { AppContext } from '../../../../context.js';
-import { app, com } from '../../../../lexicons.js';
 import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
@@ -25,35 +26,28 @@ import {
   prepareUpdate,
 } from '../../../../repo/index.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.putRecord, {
-    auth: ctx.authVerifier.authorization({
-      // @NOTE the "checkTakedown" and "checkDeactivated" checks are typically
-      // performed during auth. However, since this method's "repo" parameter
-      // can be a handle, we will need to fetch the account again to ensure that
-      // the handle matches the DID from the request's credentials. In order to
-      // avoid fetching the account twice (during auth, and then again in the
-      // controller), the checks are disabled here:
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoPutRecord.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // Performed in the handler as it requires the request body
+    },
+  });
 
-      // checkTakedown: true,
-      // checkDeactivated: true,
-      authorize: () => {
-        // Performed in the handler as it requires the request body
-      },
-    }),
-    rateLimit: [
-      {
-        name: 'repo-write-hour',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 2,
-      },
-      {
-        name: 'repo-write-day',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 2,
-      },
-    ],
-    handler: async ({ auth, input }) => {
+  // TODO: re-add repo-write-hour / repo-write-day rate limits as router-level
+  // middleware once XRPCRouter is wired up. calcPoints: 2.
+
+  return {
+    lxm: ComAtprotoRepoPutRecord.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const {
         repo,
         collection,
@@ -62,7 +56,7 @@ export default function (server: Server, ctx: AppContext) {
         validate,
         swapCommit,
         swapRecord,
-      } = input.body;
+      } = input;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
@@ -74,8 +68,6 @@ export default function (server: Server, ctx: AppContext) {
         throw new AuthRequiredError();
       }
 
-      // We can't compute permissions based on the request payload ("input") in
-      // the 'auth' phase, so we do it here.
       if (auth.credentials.type === 'oauth') {
         auth.credentials.permissions.assertRepo({
           action: 'create',
@@ -98,8 +90,8 @@ export default function (server: Server, ctx: AppContext) {
           const current = await actorTxn.record.getRecord(uri, null, true);
           const isUpdate = current !== null;
 
-          // @TODO temporaray hack for legacy blob refs in profiles - remove after migrating legacy blobs
-          if (isUpdate && collection === app.bsky.actor.profile.$type) {
+          // @TODO temporary hack for legacy blob refs in profiles - remove after migrating legacy blobs
+          if (isUpdate && collection === 'app.bsky.actor.profile') {
             await updateProfileLegacyBlobRef(actorTxn, record);
           }
 
@@ -119,7 +111,7 @@ export default function (server: Server, ctx: AppContext) {
               : await prepareCreate(writeInfo);
           } catch (err) {
             if (err instanceof InvalidRecordError) {
-              throw new InvalidRequestError(err.message);
+              throw new InvalidRequestError({ message: err.message });
             }
             throw err;
           }
@@ -139,10 +131,12 @@ export default function (server: Server, ctx: AppContext) {
                 err instanceof BadCommitSwapError ||
                 err instanceof BadRecordSwapError
               ) {
-                throw new InvalidRequestError(err.message, 'InvalidSwap');
-              } else {
-                throw err;
+                throw new InvalidRequestError({
+                  message: err.message,
+                  error: 'InvalidSwap',
+                });
               }
+              throw err;
             });
 
           await ctx.sequencer.sequenceCommit(did, commit);
@@ -162,9 +156,8 @@ export default function (server: Server, ctx: AppContext) {
           });
       }
 
-      return {
-        encoding: 'application/json',
-        body: {
+      return json(
+        {
           uri: write.uri.toString(),
           cid: write.cid.toString(),
           commit: commit
@@ -175,9 +168,10 @@ export default function (server: Server, ctx: AppContext) {
             : undefined,
           validationStatus: write.validationStatus,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }
 
 // WARNING: mutates object

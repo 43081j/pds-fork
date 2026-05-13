@@ -1,3 +1,9 @@
+import { Readable } from 'node:stream';
+import { ComAtprotoRepoImportRepo } from '@atcute/atproto';
+import {
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
+} from '@atcute/xrpc-server';
 import { TID } from '@atproto/common';
 import { LexMap, enumBlobRefs } from '@atproto/lex-data';
 import {
@@ -8,36 +14,54 @@ import {
   verifyDiff,
 } from '@atproto/repo';
 import { AtUri } from '@atproto/syntax';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { ACCESS_FULL } from '../../../../auth-scope.js';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.importRepo, {
-    opts: {
-      blobLimit: ctx.cfg.service.maxImportSize,
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoImportRepo.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    checkTakedown: true,
+    scopes: ACCESS_FULL,
+    authorize: (permissions) => {
+      permissions.assertAccount({ attr: 'repo', action: 'manage' });
     },
-    auth: ctx.authVerifier.authorization({
-      checkTakedown: true,
-      scopes: ACCESS_FULL,
-      authorize: (permissions) => {
-        permissions.assertAccount({ attr: 'repo', action: 'manage' });
-      },
-    }),
-    handler: async ({ input, auth }) => {
+  });
+
+  // TODO: re-add `opts.blobLimit = ctx.cfg.service.maxImportSize` once
+  // XRPCRouter exposes per-route body-size limits.
+
+  return {
+    lxm: ComAtprotoRepoImportRepo.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       if (!ctx.cfg.service.acceptingImports) {
-        throw new InvalidRequestError('Service is not accepting repo imports');
+        throw new InvalidRequestError({
+          message: 'Service is not accepting repo imports',
+        });
       }
 
       const { did } = auth.credentials;
 
+      if (!request.body) {
+        throw new InvalidRequestError({ message: 'Missing request body' });
+      }
+      const bodyStream = Readable.fromWeb(
+        request.body as Parameters<typeof Readable.fromWeb>[0],
+      );
+
       // @NOTE process as much as we can before the transaction, in particular
       // the reading of the body stream.
-      const { roots, blocks } = await readCarStream(input.body);
+      const { roots, blocks } = await readCarStream(bodyStream);
       if (roots.length !== 1) {
         await blocks.dump();
-        throw new InvalidRequestError('expected one root');
+        throw new InvalidRequestError({ message: 'expected one root' });
       }
 
       const blockMap = new BlockMap();
@@ -72,13 +96,13 @@ export default function (server: Server, ctx: AppContext) {
             let parsedRecord: LexMap;
             try {
               // @NOTE getAndParseRecord returns a promise for historical
-              // reasons but it's internal processing is actually synchronous.
+              // reasons but its internal processing is actually synchronous.
               const parsed = await getAndParseRecord(blockMap, write.cid);
               parsedRecord = parsed.record;
             } catch {
-              throw new InvalidRequestError(
-                `Could not parse record at '${write.collection}/${write.rkey}'`,
-              );
+              throw new InvalidRequestError({
+                message: `Could not parse record at '${write.collection}/${write.rkey}'`,
+              });
             }
 
             await store.record.indexRecord(
@@ -96,6 +120,8 @@ export default function (server: Server, ctx: AppContext) {
           }
         }
       });
+
+      return new Response(null, { status: 200, headers: responseHeaders });
     },
-  });
+  };
 }

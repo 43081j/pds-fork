@@ -1,15 +1,22 @@
-import { Server } from '@atproto/xrpc-server';
+import { ComAtprotoRepoListMissingBlobs } from '@atcute/atproto';
+import { type XrpcQueryHandlerOptions, json } from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.listMissingBlobs, {
-    auth: ctx.authVerifier.authorization({
-      authorize: () => {
-        // always allow
-      },
-    }),
-    handler: async ({ auth, params }) => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoRepoListMissingBlobs.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // always allow
+    },
+  });
+
+  return {
+    lxm: ComAtprotoRepoListMissingBlobs.mainSchema,
+    handler: async ({ request, params }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({ request, responseHeaders, params: {} });
+
       const { did } = auth.credentials;
       const { limit, cursor } = params;
 
@@ -17,13 +24,13 @@ export default function (server: Server, ctx: AppContext) {
         store.repo.blob.listMissingBlobs({ limit, cursor }),
       );
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           blobs,
           cursor: blobs.at(-1)?.cid,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }

@@ -1,11 +1,12 @@
-import { parseCid } from '@atproto/lex-data';
+import { ComAtprotoRepoDeleteRecord } from '@atcute/atproto';
 import {
+  type XrpcProcedureHandlerOptions,
   AuthRequiredError,
   InvalidRequestError,
-  Server,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
+import { parseCid } from '@atproto/lex-data';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { dbLogger } from '../../../../logger.js';
 import {
   BadCommitSwapError,
@@ -13,36 +14,29 @@ import {
   prepareDelete,
 } from '../../../../repo/index.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.deleteRecord, {
-    auth: ctx.authVerifier.authorization({
-      // @NOTE the "checkTakedown" and "checkDeactivated" checks are typically
-      // performed during auth. However, since this method's "repo" parameter
-      // can be a handle, we will need to fetch the account again to ensure that
-      // the handle matches the DID from the request's credentials. In order to
-      // avoid fetching the account twice (during auth, and then again in the
-      // controller), the checks are disabled here:
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoDeleteRecord.mainSchema> {
+  const verifier = ctx.authVerifier.authorization({
+    authorize: () => {
+      // Performed in the handler as it requires the request body
+    },
+  });
 
-      // checkTakedown: true,
-      // checkDeactivated: true,
-      authorize: () => {
-        // Performed in the handler as it requires the request body
-      },
-    }),
-    rateLimit: [
-      {
-        name: 'repo-write-hour',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 1,
-      },
-      {
-        name: 'repo-write-day',
-        calcKey: ({ auth }) => auth.credentials.did,
-        calcPoints: () => 1,
-      },
-    ],
-    handler: async ({ input: { body }, auth }) => {
-      const { repo, collection, rkey, swapCommit, swapRecord } = body;
+  // TODO: re-add repo-write-hour / repo-write-day rate limits as router-level
+  // middleware once XRPCRouter is wired up. calcPoints: 1.
+
+  return {
+    lxm: ComAtprotoRepoDeleteRecord.mainSchema,
+    handler: async ({ request, input }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
+      const { repo, collection, rkey, swapCommit, swapRecord } = input;
 
       const account = await ctx.authVerifier.findAccount(repo, {
         checkDeactivated: true,
@@ -54,8 +48,6 @@ export default function (server: Server, ctx: AppContext) {
         throw new AuthRequiredError();
       }
 
-      // We can't compute permissions based on the request payload ("input") in
-      // the 'auth' phase, so we do it here.
       if (auth.credentials.type === 'oauth') {
         auth.credentials.permissions.assertRepo({
           action: 'delete',
@@ -85,10 +77,12 @@ export default function (server: Server, ctx: AppContext) {
               err instanceof BadCommitSwapError ||
               err instanceof BadRecordSwapError
             ) {
-              throw new InvalidRequestError(err.message, 'InvalidSwap');
-            } else {
-              throw err;
+              throw new InvalidRequestError({
+                message: err.message,
+                error: 'InvalidSwap',
+              });
             }
+            throw err;
           });
 
         await ctx.sequencer.sequenceCommit(did, commit);
@@ -106,9 +100,8 @@ export default function (server: Server, ctx: AppContext) {
           });
       }
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
+      return json(
+        {
           commit: commit
             ? {
                 cid: commit.cid.toString(),
@@ -116,7 +109,8 @@ export default function (server: Server, ctx: AppContext) {
               }
             : undefined,
         },
-      };
+        { headers: responseHeaders },
+      );
     },
-  });
+  };
 }

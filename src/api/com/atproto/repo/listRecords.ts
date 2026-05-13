@@ -1,36 +1,43 @@
+import { ComAtprotoRepoListRecords } from '@atcute/atproto';
+import {
+  type XrpcQueryHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import { AtUri } from '@atproto/syntax';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.listRecords, async ({ params }) => {
-    const { repo, collection, limit = 50, cursor, reverse = false } = params;
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoRepoListRecords.mainSchema> {
+  return {
+    lxm: ComAtprotoRepoListRecords.mainSchema,
+    handler: async ({ params }) => {
+      const { repo, collection, limit = 50, cursor, reverse = false } = params;
 
-    const did = await ctx.accountManager.getDidForActor(repo);
-    if (!did) {
-      throw new InvalidRequestError(`Could not find repo: ${repo}`);
-    }
+      const did = await ctx.accountManager.getDidForActor(repo);
+      if (!did) {
+        throw new InvalidRequestError({
+          message: `Could not find repo: ${repo}`,
+        });
+      }
 
-    const records = await ctx.actorStore.read(did, (store) =>
-      store.record.listRecordsForCollection({
-        collection,
-        limit,
-        reverse,
-        cursor,
-      }),
-    );
+      const records = await ctx.actorStore.read(did, (store) =>
+        store.record.listRecordsForCollection({
+          collection,
+          limit,
+          reverse,
+          cursor,
+        }),
+      );
 
-    const lastRecord = records.at(-1);
-    const lastUri = lastRecord && new AtUri(lastRecord?.uri);
+      const lastRecord = records.at(-1);
+      const lastUri = lastRecord && new AtUri(lastRecord?.uri);
 
-    return {
-      encoding: 'application/json' as const,
-      body: {
+      return json({
         records,
-        // Paginate with `before` by default, paginate with `after` when using `reverse`.
         cursor: lastUri?.rkey,
-      },
-    };
-  });
+      });
+    },
+  };
 }

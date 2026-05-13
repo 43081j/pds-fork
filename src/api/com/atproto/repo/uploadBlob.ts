@@ -1,33 +1,51 @@
-import { DAY } from '@atproto/common';
+import { Readable } from 'node:stream';
+import { ComAtprotoRepoUploadBlob } from '@atcute/atproto';
 import {
-  Server,
+  type XrpcProcedureHandlerOptions,
+  InvalidRequestError,
   UpstreamTimeoutError,
-  parseReqEncoding,
-} from '@atproto/xrpc-server';
+  json,
+} from '@atcute/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(com.atproto.repo.uploadBlob, {
-    auth: ctx.authVerifier.authorizationOrUserServiceAuth({
-      checkTakedown: true,
-      authorize: (permissions, { req }) => {
-        const encoding = parseReqEncoding(req);
-        permissions.assertBlob({ mime: encoding });
-      },
-    }),
-    rateLimit: {
-      durationMs: DAY,
-      points: 1000,
+export default function (
+  ctx: AppContext,
+): XrpcProcedureHandlerOptions<ComAtprotoRepoUploadBlob.mainSchema> {
+  const verifier = ctx.authVerifier.authorizationOrUserServiceAuth({
+    checkTakedown: true,
+    authorize: (permissions, { request }) => {
+      const encoding = parseRequestEncoding(request);
+      permissions.assertBlob({ mime: encoding });
     },
-    handler: async ({ auth, input }) => {
+  });
+
+  // TODO: re-add per-day rate limit (durationMs: DAY, points: 1000) once
+  // XRPCRouter middleware is wired up.
+
+  return {
+    lxm: ComAtprotoRepoUploadBlob.mainSchema,
+    handler: async ({ request }) => {
+      const responseHeaders = new Headers();
+      const auth = await verifier({
+        request,
+        responseHeaders,
+        params: {},
+      });
+
       const requester = auth.credentials.did;
+      const encoding = parseRequestEncoding(request);
+      if (!request.body) {
+        throw new InvalidRequestError({ message: 'Missing request body' });
+      }
+      const bodyStream = Readable.fromWeb(
+        request.body as Parameters<typeof Readable.fromWeb>[0],
+      );
 
       const blob = await ctx.actorStore.writeNoTransaction(
         requester,
         async (store) => {
           const metadata = await store.repo.blob
-            .uploadBlobAndGetMetadata(input.encoding, input.body)
+            .uploadBlobAndGetMetadata(encoding, bodyStream)
             .catch(throwAbortAsUpstreamError);
 
           return store.transact(async (actorTxn) => {
@@ -44,17 +62,25 @@ export default function (server: Server, ctx: AppContext) {
         },
       );
 
-      return {
-        encoding: 'application/json' as const,
-        body: { blob },
-      };
+      return json({ blob }, { headers: responseHeaders });
     },
-  });
+  };
+}
+
+function parseRequestEncoding(request: Request): string {
+  const contentType = request.headers.get('content-type');
+  if (!contentType) {
+    throw new InvalidRequestError({ message: 'Missing content-type header' });
+  }
+  // strip parameters (e.g. "; charset=utf-8")
+  return contentType.split(';')[0].trim();
 }
 
 function throwAbortAsUpstreamError(err: unknown): never {
-  if (err?.['name'] === 'AbortError') {
-    throw new UpstreamTimeoutError('Operation timed out, please try again.');
+  if ((err as { name?: string })?.name === 'AbortError') {
+    throw new UpstreamTimeoutError({
+      message: 'Operation timed out, please try again.',
+    });
   }
   throw err;
 }

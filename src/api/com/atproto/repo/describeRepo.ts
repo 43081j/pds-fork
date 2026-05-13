@@ -1,14 +1,20 @@
+import { ComAtprotoRepoDescribeRepo } from '@atcute/atproto';
+import {
+  type XrpcQueryHandlerOptions,
+  InvalidRequestError,
+  json,
+} from '@atcute/xrpc-server';
 import * as id from '@atproto/identity';
 import { HandleString, INVALID_HANDLE } from '@atproto/syntax';
-import { InvalidRequestError, Server } from '@atproto/xrpc-server';
 import { AppContext } from '../../../../context.js';
-import { com } from '../../../../lexicons.js';
 import { assertRepoAvailability } from '../sync/util.js';
 
-export default function (server: Server, ctx: AppContext) {
-  server.add(
-    com.atproto.repo.describeRepo,
-    async ({ params }): Promise<com.atproto.repo.describeRepo.$Output> => {
+export default function (
+  ctx: AppContext,
+): XrpcQueryHandlerOptions<ComAtprotoRepoDescribeRepo.mainSchema> {
+  return {
+    lxm: ComAtprotoRepoDescribeRepo.mainSchema,
+    handler: async ({ params }) => {
       const { repo } = params;
 
       const account = await assertRepoAvailability(ctx, repo, false);
@@ -17,7 +23,9 @@ export default function (server: Server, ctx: AppContext) {
       try {
         didDoc = await ctx.idResolver.did.ensureResolve(account.did);
       } catch (err) {
-        throw new InvalidRequestError(`Could not resolve DID: ${err}`);
+        throw new InvalidRequestError({
+          message: `Could not resolve DID: ${err}`,
+        });
       }
 
       const handle = id.getHandle(didDoc);
@@ -27,17 +35,13 @@ export default function (server: Server, ctx: AppContext) {
         store.record.listCollections(),
       );
 
-      return {
-        encoding: 'application/json' as const,
-        body: {
-          handle: (account.handle ?? INVALID_HANDLE) as HandleString,
-          did: account.did,
-          // @ts-expect-error https://github.com/bluesky-social/atproto/pull/4406
-          didDoc,
-          collections,
-          handleIsCorrect,
-        },
-      };
+      return json({
+        handle: (account.handle ?? INVALID_HANDLE) as HandleString,
+        did: account.did,
+        didDoc,
+        collections,
+        handleIsCorrect,
+      });
     },
-  );
+  };
 }
